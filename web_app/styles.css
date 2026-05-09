@@ -7,6 +7,13 @@
   --ok: #3dd68c;
 }
 
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -225,6 +232,9 @@ body a:active {
   padding: 14px 16px;
   margin-bottom: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .muted {
@@ -256,6 +266,8 @@ select,
 button,
 textarea {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin: 6px 0 10px;
   padding: 10px 12px;
   border-radius: 10px;
@@ -263,6 +275,20 @@ textarea {
   background: #121a26;
   color: var(--text);
   font-size: 1rem;
+}
+
+/* На узких экранах длинные подписи/значения не должны "раздувать" контейнеры. */
+.card > *,
+.card label,
+.card p,
+.card h1,
+.card h2,
+.card h3,
+.card h4,
+.card h5,
+.card h6 {
+  max-width: 100%;
+  min-width: 0;
 }
 
 button {
