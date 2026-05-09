@@ -51,6 +51,11 @@ from utils.group_email_attachments_store import (
 from utils.homework_delete import delete_homework_for_study_group
 from utils.webapp import init_data_from_request_headers, validate_init_data
 
+from handlers.schedule import (
+    ensure_schedule_cache_covers_range,
+    schedule_cache_needs_expansion,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,10 +74,8 @@ async def _resync_schedule_cache_if_stale(
     session,
     sg: StudyGroup | None,
     schedules: list[Schedule],
-    *,
-    days_ahead: int,
 ) -> bool:
-    """Перезаписать будущее расписание из РУЗ, если кэш без lesson_kind или contingent. Возвращает True, если был commit."""
+    """Перезаписать расписание из РУЗ, если кэш без lesson_kind или contingent. Возвращает True, если был commit."""
     if not sg or not schedules or not _schedule_rows_need_ruz_refresh(schedules):
         return False
     today = date.today()
@@ -80,7 +83,7 @@ async def _resync_schedule_cache_if_stale(
         return False
     from handlers.schedule import sync_study_group_schedule
 
-    n = await sync_study_group_schedule(session, sg, days_ahead=days_ahead)
+    n = await sync_study_group_schedule(session, sg)
     if not n:
         return False
     await session.commit()
@@ -483,6 +486,12 @@ async def api_schedule_week(request: web.Request) -> web.Response:
     today = date.today()
     end = today + timedelta(days=7)
     async with async_session_maker() as session:
+        sg = await session.get(StudyGroup, u["study_group_id"])
+        if sg and await schedule_cache_needs_expansion(
+            session, u["study_group_id"], today, end
+        ):
+            if await ensure_schedule_cache_covers_range(session, sg, today, end):
+                await session.commit()
         stmt = (
             select(Schedule)
             .where(
@@ -493,10 +502,9 @@ async def api_schedule_week(request: web.Request) -> web.Response:
             .order_by(Schedule.lesson_date, Schedule.start_time)
         )
         sched = list(await session.scalars(stmt))
-        sg = await session.get(StudyGroup, u["study_group_id"])
-        if await _resync_schedule_cache_if_stale(
-            session, sg, sched, days_ahead=max(28, (end - today).days + 1)
-        ):
+        if not sg:
+            sg = await session.get(StudyGroup, u["study_group_id"])
+        if await _resync_schedule_cache_if_stale(session, sg, sched):
             sched = list(await session.scalars(stmt))
         rows = [
             {
@@ -521,6 +529,12 @@ async def api_schedule_today(request: web.Request) -> web.Response:
         return web.json_response({"items": [], "need_group": True})
     today = date.today()
     async with async_session_maker() as session:
+        sg = await session.get(StudyGroup, u["study_group_id"])
+        if sg and await schedule_cache_needs_expansion(
+            session, u["study_group_id"], today, today
+        ):
+            if await ensure_schedule_cache_covers_range(session, sg, today, today):
+                await session.commit()
         stmt = (
             select(Schedule)
             .where(
@@ -530,8 +544,9 @@ async def api_schedule_today(request: web.Request) -> web.Response:
             .order_by(Schedule.start_time)
         )
         sched = list(await session.scalars(stmt))
-        sg = await session.get(StudyGroup, u["study_group_id"])
-        if await _resync_schedule_cache_if_stale(session, sg, sched, days_ahead=21):
+        if not sg:
+            sg = await session.get(StudyGroup, u["study_group_id"])
+        if await _resync_schedule_cache_if_stale(session, sg, sched):
             sched = list(await session.scalars(stmt))
         rows = [
             {
@@ -579,13 +594,13 @@ async def api_schedule_week_window(request: web.Request) -> web.Response:
         )
         schedules = list(await session.scalars(week_stmt))
         sg = await session.get(StudyGroup, u["study_group_id"])
-        today = date.today()
-        if await _resync_schedule_cache_if_stale(
-            session,
-            sg,
-            schedules,
-            days_ahead=max(28, (week_end - today).days + 1),
+        if sg and await schedule_cache_needs_expansion(
+            session, u["study_group_id"], week_start, week_end
         ):
+            if await ensure_schedule_cache_covers_range(session, sg, week_start, week_end):
+                await session.commit()
+                schedules = list(await session.scalars(week_stmt))
+        if await _resync_schedule_cache_if_stale(session, sg, schedules):
             schedules = list(await session.scalars(week_stmt))
         ids = [s.id for s in schedules]
         hw_ids: set[int] = set()

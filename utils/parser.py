@@ -344,27 +344,37 @@ def build_schedule_rows(group_name: str, items: list[dict[str, Any]]) -> list[di
 def fetch_schedule_for_group(
     group_name: str,
     group_search: str | None = None,
-    days_ahead: int = 14,
     base_url: str | None = None,
+    *,
+    date_begin: date | None = None,
+    date_end: date | None = None,
 ) -> list[dict[str, Any]]:
     gid = search_group_id(group_search or group_name, base_url=base_url)
     if not gid:
         logger.error("Группа не найдена в РУЗ: %s (url=%s)", group_search or group_name, base_url or config.RUZ_BASE_URL)
         return []
     today = date.today()
-    end = today + timedelta(days=days_ahead)
-    items = fetch_schedule_json(gid, today, end, base_url=base_url)
+    db = date_begin if date_begin is not None else today - timedelta(days=config.RUZ_SCHEDULE_PAST_DAYS)
+    de = date_end if date_end is not None else today + timedelta(days=config.RUZ_SCHEDULE_FUTURE_DAYS)
+    items = fetch_schedule_json(gid, db, de, base_url=base_url)
     return build_schedule_rows(group_name, items)
 
 
 async def fetch_schedule_async(
     group_name: str,
     group_search: str | None = None,
-    days_ahead: int = 14,
     base_url: str | None = None,
+    *,
+    date_begin: date | None = None,
+    date_end: date | None = None,
 ) -> list[dict[str, Any]]:
     return await asyncio.to_thread(
-        fetch_schedule_for_group, group_name, group_search, days_ahead, base_url
+        fetch_schedule_for_group,
+        group_name,
+        group_search,
+        base_url,
+        date_begin=date_begin,
+        date_end=date_end,
     )
 
 

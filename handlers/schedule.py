@@ -10,6 +10,7 @@ from aiogram.fsm.state import default_state
 from aiogram.types import Message
 from sqlalchemy import delete, func, select
 
+import config
 from database import Schedule, StudyGroup, User
 from handlers.states import SchedulePickDateStates
 from keyboards.reply import schedule_submenu_kb
@@ -142,11 +143,20 @@ def _fmt_day_header(sg_name: str, day: date, title: str) -> str:
     return f"<b>{_esc(sg_name)}</b>\n{title}: {wd}, {ds}"
 
 
-async def sync_study_group_schedule(session, sg: StudyGroup, days_ahead: int = 21) -> int:
-    """Подтягивает расписание с РУЗ для одной учебной группы, перезаписывая будущие дни в БД."""
+async def sync_study_group_schedule(session, sg: StudyGroup) -> int:
+    """Подтягивает расписание с РУЗ (широкий диапазон дат) и перезаписывает кэш группы в этом окне."""
     ruz_q = ruz_search_for_group(sg)
     ruz_url = ruz_base_url_for_group(sg)
-    rows = await fetch_schedule_async(sg.name, ruz_q, days_ahead=days_ahead, base_url=ruz_url)
+    today = date.today()
+    rng_lo = today - timedelta(days=config.RUZ_SCHEDULE_PAST_DAYS)
+    rng_hi = today + timedelta(days=config.RUZ_SCHEDULE_FUTURE_DAYS)
+    rows = await fetch_schedule_async(
+        sg.name,
+        ruz_q,
+        base_url=ruz_url,
+        date_begin=rng_lo,
+        date_end=rng_hi,
+    )
     if not rows:
         rows = fetch_schedule_html_fallback(sg.name, base_url=ruz_url)
     if not rows:
@@ -164,11 +174,11 @@ async def sync_study_group_schedule(session, sg: StudyGroup, days_ahead: int = 2
         seen.add(key)
         deduped.append(r)
 
-    today = date.today()
     await session.execute(
         delete(Schedule).where(
             Schedule.study_group_id == sg.id,
-            Schedule.lesson_date >= today,
+            Schedule.lesson_date >= rng_lo,
+            Schedule.lesson_date <= rng_hi,
         )
     )
     for r in deduped:
@@ -192,6 +202,35 @@ async def sync_study_group_schedule(session, sg: StudyGroup, days_ahead: int = 2
     subs = await distinct_schedule_subjects(session, sg.id)
     await sync_group_semester_catalog(session, sg, subs)
     return len(deduped)
+
+
+async def schedule_lesson_date_bounds(
+    session, study_group_id: int
+) -> tuple[date | None, date | None]:
+    row = await session.execute(
+        select(func.min(Schedule.lesson_date), func.max(Schedule.lesson_date)).where(
+            Schedule.study_group_id == study_group_id,
+        )
+    )
+    return row.one()
+
+
+async def schedule_cache_needs_expansion(
+    session, study_group_id: int, range_start: date, range_end: date
+) -> bool:
+    mn, mx = await schedule_lesson_date_bounds(session, study_group_id)
+    if mn is None or mx is None:
+        return True
+    return bool(range_start < mn or range_end > mx)
+
+
+async def ensure_schedule_cache_covers_range(
+    session, sg: StudyGroup, range_start: date, range_end: date
+) -> bool:
+    if not await schedule_cache_needs_expansion(session, sg.id, range_start, range_end):
+        return False
+    n = await sync_study_group_schedule(session, sg)
+    return n > 0
 
 
 async def _lessons_for_day(
@@ -245,33 +284,25 @@ async def send_schedule_day(
     today = date.today()
     rows = await _lessons_for_day(session, db_user.study_group_id, day)
 
-    if not rows and day >= today:
-        upcoming_n = await session.scalar(
-            select(func.count())
-            .select_from(Schedule)
-            .where(
-                Schedule.study_group_id == sg.id,
-                Schedule.lesson_date >= today,
-            )
+    need_bulk = await schedule_cache_needs_expansion(
+        session, db_user.study_group_id, day, day
+    )
+    if not rows and need_bulk:
+        await message.answer(f"Группа «{sg.name}». Загружаю расписание с сайта РУЗ…")
+    if await ensure_schedule_cache_covers_range(session, sg, day, day):
+        rows = await _lessons_for_day(session, db_user.study_group_id, day)
+    elif not rows and need_bulk:
+        await message.answer(
+            "Не удалось загрузить расписание с сайта. "
+            "Пусть староста проверит в /my_group строку поиска РУЗ "
+            "или выполнит /update_schedule."
         )
-        if not upcoming_n:
-            await message.answer(f"Группа «{sg.name}». Загружаю расписание с сайта РУЗ…")
-            need_days = max(21, (day - today).days + 1)
-            n = await sync_study_group_schedule(session, sg, days_ahead=need_days)
-            if not n:
-                await message.answer(
-                    "Не удалось загрузить расписание с сайта. "
-                    "Пусть староста проверит в /my_group строку поиска РУЗ "
-                    "или выполнит /update_schedule."
-                )
-                return
-            rows = await _lessons_for_day(session, db_user.study_group_id, day)
+        return
 
     if rows and day >= today and (
         _all_lesson_kinds_empty(rows) or _any_contingent_label_missing(rows)
     ):
-        need_days = max(21, (day - today).days + 1)
-        n = await sync_study_group_schedule(session, sg, days_ahead=need_days)
+        n = await sync_study_group_schedule(session, sg)
         if n:
             rows = await _lessons_for_day(session, db_user.study_group_id, day)
 
@@ -304,23 +335,15 @@ async def send_schedule_week(message: Message, session, db_user: User | None) ->
     today = date.today()
     end = today + timedelta(days=6)
 
-    upcoming_n = await session.scalar(
-        select(func.count())
-        .select_from(Schedule)
-        .where(
-            Schedule.study_group_id == sg.id,
-            Schedule.lesson_date >= today,
-        )
-    )
-    if not upcoming_n:
+    need_bulk = await schedule_cache_needs_expansion(session, db_user.study_group_id, today, end)
+    if need_bulk:
         await message.answer(f"Группа «{sg.name}». Загружаю расписание с сайта РУЗ…")
-        n = await sync_study_group_schedule(session, sg, days_ahead=21)
-        if not n:
-            await message.answer(
-                "Не удалось загрузить расписание с сайта. "
-                "Пусть староста проверит строку РУЗ в /my_group или выполнит /update_schedule."
-            )
-            return
+    if not await ensure_schedule_cache_covers_range(session, sg, today, end) and need_bulk:
+        await message.answer(
+            "Не удалось загрузить расписание с сайта. "
+            "Пусть староста проверит строку РУЗ в /my_group или выполнит /update_schedule."
+        )
+        return
 
     q = await session.scalars(
         select(Schedule)
@@ -335,7 +358,7 @@ async def send_schedule_week(message: Message, session, db_user: User | None) ->
     if rows and (
         _all_lesson_kinds_empty(rows) or _any_contingent_label_missing(rows)
     ):
-        n = await sync_study_group_schedule(session, sg, days_ahead=21)
+        n = await sync_study_group_schedule(session, sg)
         if n:
             q = await session.scalars(
                 select(Schedule)

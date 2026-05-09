@@ -24,6 +24,12 @@ RUZ_BASE_URL = os.getenv("RUZ_BASE_URL", "https://ruz.fa.ru").rstrip("/")
 RUZ_GROUP_SEARCH = os.getenv("RUZ_GROUP_SEARCH", GROUP_NAME).strip()
 RUZ_MAIN_URL = f"{RUZ_BASE_URL}/ruz/main"
 
+# Окно дат для API РУЗ: прошлые и будущие дни относительно сегодня (макс. ~2 года с каждой стороны).
+_RUZ_PAST = int(os.getenv("RUZ_SCHEDULE_PAST_DAYS", "400").strip() or "400")
+_RUZ_FUTURE = int(os.getenv("RUZ_SCHEDULE_FUTURE_DAYS", "400").strip() or "400")
+RUZ_SCHEDULE_PAST_DAYS = max(0, min(_RUZ_PAST, 730))
+RUZ_SCHEDULE_FUTURE_DAYS = max(0, min(_RUZ_FUTURE, 730))
+
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "0.0.0.0")
 WEBAPP_PORT = int(os.getenv("WEBAPP_PORT", "8080"))
 
