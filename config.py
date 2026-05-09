@@ -33,7 +33,14 @@ WEBAPP_PUBLIC_URL = (
     _webapp_raw if _webapp_raw else f"http://127.0.0.1:{WEBAPP_PORT}"
 )
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/bot.db")
+_raw_db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/bot.db").strip()
+# Railway Postgres часто отдаёт URL в формате postgres://...;
+# для SQLAlchemy async нужен postgresql+asyncpg://...
+if _raw_db_url.startswith("postgres://"):
+    _raw_db_url = _raw_db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+elif _raw_db_url.startswith("postgresql://") and "+asyncpg" not in _raw_db_url.split("://", 1)[0]:
+    _raw_db_url = _raw_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+DATABASE_URL = _raw_db_url
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(BASE_DIR / "data" / "uploads")))
 TZ = os.getenv("TZ", "Europe/Moscow")
 
