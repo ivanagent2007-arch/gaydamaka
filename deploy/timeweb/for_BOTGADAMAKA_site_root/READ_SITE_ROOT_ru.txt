@@ -1,0 +1,20 @@
+Эти файлы — для КОРНЯ сайта «BOTGADAMAKA» в панели Timeweb
+(тот каталог, куда привязан домен botgadamaka.cv324192.tw1.ru),
+а НЕ для папки с Python-ботом (student_assistant_bot/...).
+
+1) Файловый менеджер → открой корень сайта BOTGADAMAKA.
+
+2) Удали или переименуй index.htm / index.html от заглушки Timeweb.
+
+3) Загрузь сюда файл .htaccess из этой папки (имя именно .htaccess).
+   Если порт бота не 8080 — открой .htaccess и замени 8080 на свой WEBAPP_PORT из .env бота.
+
+4) Включи SSL и HTTPS в настройках сайта (Let's Encrypt).
+   Открывай мини-приложение только так:
+   https://botgadamaka.cv324192.tw1.ru/index.html
+   (не http:// — иначе «Не защищено» и Telegram мини-приложение не примет URL.)
+
+5) Бот на сервере должен быть запущен (python3 main.py) и слушать тот же порт.
+
+Если после .htaccess сайт отдаёт 500 — в поддержку Timeweb про mod_proxy;
+либо VPS + nginx (файл TIMEWEB.txt в родительской папке deploy/timeweb).

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Почта группы</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      #main.card {
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+      }
+      /* Список писем: отдельные блоки с зазором */
+      #main.card.mail-list-card {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 12px 14px;
+        background: rgba(26, 35, 50, 0.65);
+      }
+      .mail-row {
+        position: relative;
+        text-align: left;
+        width: 100%;
+        padding: 14px 36px 12px 14px;
+        margin: 0;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 12px;
+        background: rgba(15, 20, 25, 0.55);
+        color: var(--text, #fff);
+        cursor: pointer;
+        font: inherit;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      }
+      .mail-row:hover {
+        border-color: rgba(91, 140, 255, 0.35);
+        background: rgba(91, 140, 255, 0.07);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+      }
+      .mail-row:active {
+        opacity: 0.92;
+        transform: scale(0.998);
+      }
+      .mail-row::after {
+        content: "›";
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 1.35rem;
+        font-weight: 300;
+        color: var(--muted, #8b9bb4);
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      .mail-row-box {
+        font-weight: 500;
+        font-size: 0.78rem;
+        color: var(--muted, #8b9bb4);
+        margin-right: 4px;
+      }
+      .mail-row-subj {
+        display: block;
+        font-weight: 600;
+        font-size: 0.98rem;
+        line-height: 1.35;
+        margin: 0 0 2px;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      .mail-row-from {
+        display: block;
+        font-size: 0.8rem;
+        line-height: 1.4;
+        color: var(--muted, #8b9bb4);
+        margin-top: 8px;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      .mail-row-date {
+        display: block;
+        font-size: 0.74rem;
+        color: var(--muted, #8b9bb4);
+        margin-top: 4px;
+        opacity: 0.92;
+      }
+      .mail-detail-head {
+        margin-bottom: 12px;
+      }
+      .mail-body {
+        white-space: pre-line;
+        word-break: break-word;
+        line-height: 1.45;
+        font-size: 0.95rem;
+      }
+      .mail-back {
+        margin-bottom: 14px;
+      }
+      .mail-att-title {
+        font-size: 1rem;
+        margin: 14px 0 8px;
+      }
+      .mail-att-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .mail-att-list li {
+        margin: 6px 0;
+        max-width: 100%;
+        min-width: 0;
+      }
+      .mail-att-dl {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        align-self: stretch;
+        text-align: left;
+        white-space: normal !important;
+        gap: 4px;
+        padding: 10px 12px;
+        line-height: 1.35;
+        overflow-x: hidden;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      .mail-att-name {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-all;
+        white-space: normal !important;
+      }
+      .mail-att-size {
+        font-size: 0.82rem;
+        color: var(--muted, #aaa);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="pageTitle">Почта группы</h1>
+      <p class="app-page-lead muted">
+        Письма с общего ящика группы: текст и вложения открываются здесь.
+      </p>
+    </header>
+    <div id="banner"></div>
+    <div id="main" class="card">Загрузка…</div>
+    <p id="err" class="err"></p>
+    <script src="api.js"></script>
+    <script src="nav.js"></script>
+    <script>
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      /** Схлопывает «простыни» пустых строк (старые записи в БД и т.п.). */
+      function normalizeMailBodyText(s) {
+        var t = String(s || "")
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n");
+        t = t.replace(/[\u00a0\u200b\u200c\u200d\ufeff]+/g, " ");
+        t = t.replace(/[ \t]+/g, " ");
+        t = t.replace(/\n(?:[ \t]*\n)+/g, "\n\n");
+        var lines = t.split("\n").map(function (ln) {
+          return ln.trim();
+        });
+        var out = [];
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i]) out.push(lines[i]);
+          else if (out.length && out[out.length - 1] !== "") out.push("");
+        }
+        while (out.length && out[out.length - 1] === "") out.pop();
+        return out.join("\n").trim();
+      }
+
+      function fmtSize(n) {
+        var x = +n || 0;
+        if (x < 1024) return x + " Б";
+        if (x < 1048576) return (x / 1024).toFixed(1) + " КБ";
+        return (x / 1048576).toFixed(1) + " МБ";
+      }
+
+      function fmtDt(iso) {
+        if (!iso) return "";
+        try {
+          var d = new Date(iso);
+          if (isNaN(d.getTime())) return iso;
+          return d.toLocaleString("ru-RU", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        } catch (e) {
+          return iso;
+        }
+      }
+
+      function getQueryId() {
+        var q = new URLSearchParams(location.search).get("id");
+        if (q && /^\d+$/.test(q)) return +q;
+        return null;
+      }
+
+      function setUrlId(id) {
+        var u = new URL(location.href);
+        if (id == null) u.searchParams.delete("id");
+        else u.searchParams.set("id", String(id));
+        history.replaceState({}, "", u.pathname + u.search);
+      }
+
+      async function renderList() {
+        var el = document.getElementById("main");
+        document.getElementById("pageTitle").textContent = "Почта группы";
+        var data = await SA.apiGet("/api/group/mail");
+        if (data.need_group) {
+          document.getElementById("banner").innerHTML = SA.needGroupBanner;
+          el.className = "card";
+          el.textContent = "Сначала вступите в группу через бота.";
+          return;
+        }
+        var items = data.items || [];
+        if (!items.length) {
+          el.className = "card";
+          el.innerHTML =
+            '<p class="muted" style="margin:0">Пока нет сохранённых писем. Староста настроит IMAP в боте («Почта»), затем письма появятся здесь.</p>';
+          return;
+        }
+        el.className = "card mail-list-card";
+        el.innerHTML = "";
+        items.forEach(function (m) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "mail-row";
+          var box = m.mailbox_title
+            ? '<span class="mail-row-box">[' + escapeHtml(m.mailbox_title) + "]</span> "
+            : "";
+          btn.innerHTML =
+            '<span class="mail-row-subj">' +
+            box +
+            escapeHtml(m.subject || "(без темы)") +
+            "</span>" +
+            '<span class="mail-row-from">' +
+            escapeHtml(m.sender || "—") +
+            "</span>" +
+            '<span class="mail-row-date">' +
+            escapeHtml(fmtDt(m.received_at)) +
+            "</span>";
+          btn.addEventListener("click", function () {
+            setUrlId(m.id);
+            openDetail(m.id);
+          });
+          el.appendChild(btn);
+        });
+      }
+
+      async function openDetail(id) {
+        var el = document.getElementById("main");
+        el.className = "card";
+        var errEl = document.getElementById("err");
+        errEl.textContent = "";
+        document.getElementById("pageTitle").textContent = "Письмо";
+        el.innerHTML = "<p class=\"muted\">Загрузка…</p>";
+        try {
+          var m = await SA.apiGet("/api/group/mail/" + id);
+          var atts = m.attachments || [];
+          var boxLine = m.mailbox_title
+            ? '<p class="muted" style="margin:0 0 6px">Ящик: ' +
+              escapeHtml(m.mailbox_title) +
+              "</p>"
+            : "";
+          var attBlock = "";
+          if (atts.length) {
+            attBlock =
+              '<h3 class="mail-att-title">Вложения</h3><ul class="mail-att-list">';
+            atts.forEach(function (a) {
+              attBlock +=
+                '<li><button type="button" class="secondary mail-att-dl" data-aid="' +
+                a.id +
+                '"><span class="mail-att-name">' +
+                escapeHtml(a.filename || "файл") +
+                '</span><span class="mail-att-size">' +
+                escapeHtml(fmtSize(a.size_bytes)) +
+                "</span></button></li>";
+            });
+            attBlock += "</ul>";
+          }
+          el.innerHTML =
+            '<button type="button" class="secondary mail-back" id="mailBack">← К списку</button>' +
+            '<div class="mail-detail-head">' +
+            boxLine +
+            "<p style=\"margin:0 0 4px\"><strong>" +
+            escapeHtml(m.subject || "(без темы)") +
+            "</strong></p>" +
+            '<p class="muted" style="margin:0 0 8px;font-size:0.88rem">' +
+            escapeHtml(m.sender || "") +
+            " · " +
+            escapeHtml(fmtDt(m.received_at)) +
+            "</p></div>" +
+            '<div class="mail-body">' +
+            escapeHtml(normalizeMailBodyText(m.body_text || "(текст пуст)")) +
+            "</div>" +
+            attBlock;
+          document.getElementById("mailBack").addEventListener("click", function () {
+            setUrlId(null);
+            renderList().catch(function (e) {
+              errEl.textContent = String(e);
+            });
+          });
+          el.querySelectorAll(".mail-att-dl").forEach(function (btn) {
+            btn.addEventListener("click", async function () {
+              var aid = +btn.getAttribute("data-aid");
+              var meta = atts.find(function (x) {
+                return x.id === aid;
+              });
+              var fn = (meta && meta.filename) || "file";
+              try {
+                var blob = await SA.downloadWithAuth(
+                  "/api/group/mail/" + id + "/attachment/" + aid
+                );
+                var a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = fn;
+                a.click();
+                URL.revokeObjectURL(a.href);
+              } catch (e2) {
+                alert(String(e2));
+              }
+            });
+          });
+        } catch (e) {
+          errEl.textContent = String(e);
+          el.innerHTML =
+            '<button type="button" class="secondary mail-back" id="mailBack2">← К списку</button>';
+          document.getElementById("mailBack2").addEventListener("click", function () {
+            setUrlId(null);
+            renderList().catch(function (e2) {
+              errEl.textContent = String(e2);
+            });
+          });
+        }
+      }
+
+      (async function () {
+        try {
+          var id = getQueryId();
+          if (id) await openDetail(id);
+          else await renderList();
+        } catch (e) {
+          document.getElementById("err").textContent = String(e);
+          document.getElementById("main").textContent = "";
+        }
+      })();
+    </script>
+  </body>
+</html>

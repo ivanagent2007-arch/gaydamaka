@@ -1,0 +1,17 @@
+# Скопируйте содержимое в файл .htaccess в КОРНЕ сайта BOTGADAMAKA на Timeweb
+# (там же, где лежит index.htm от заглушки — его лучше удалить или переименовать).
+#
+# Назначение: Apache принимает HTTPS от посетителей и проксирует запросы на
+# процесс бота (aiohttp) на этом же сервере.
+#
+# Порт ниже = WEBAPP_PORT из .env бота (часто 8080). Должен совпадать.
+#
+# Если после сохранения сайт отдаёт 500 — mod_proxy может быть отключён;
+# напишите в поддержку Timeweb или используйте VPS + nginx (TIMEWEB.txt).
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteCond %{REQUEST_URI} !^/\.well-known/
+RewriteRule ^(.*)$ http://127.0.0.1:8080/$1 [P,L]
+</IfModule>

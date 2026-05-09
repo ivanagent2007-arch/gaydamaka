@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Дедлайны</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      .deadlines-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 48px;
+      }
+      .deadlines-empty {
+        margin: 0;
+        padding: 14px 4px;
+        text-align: center;
+      }
+
+      .deadlines-elder label {
+        display: block;
+        margin: 14px 0 4px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .deadlines-elder label:first-of-type {
+        margin-top: 4px;
+      }
+      .deadlines-elder select,
+      .deadlines-elder input:not([type="file"]),
+      .deadlines-elder textarea {
+        margin: 0 0 0;
+      }
+      .deadlines-elder input[type="file"] {
+        margin: 4px 0 0;
+      }
+      .deadlines-elder #hwSubmit,
+      .deadlines-elder #dlSubmit {
+        margin-top: 18px;
+        width: 100%;
+      }
+      .deadlines-elder #hwFormMsg,
+      .deadlines-elder #dlFormMsg,
+      .deadlines-elder #hwUploadStatus {
+        margin-top: 10px;
+        min-height: 1.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Дедлайны</h1>
+      <p class="app-page-lead muted">
+        Дедлайны группы и ДЗ к парам (срок — до конца дня занятия).
+      </p>
+    </header>
+    <div id="banner"></div>
+
+    <div id="elderPanel" class="card elder-hw-panel deadlines-elder" hidden>
+      <h2 class="block-title elder-hw-title">Староста: добавить ДЗ к паре</h2>
+      <p class="block-desc muted">
+        После сохранения ДЗ появится здесь же в списке дедлайнов.
+      </p>
+      <label for="hwLessonDate">Дата занятия</label>
+      <input type="date" id="hwLessonDate" />
+      <label for="hwLessonSel">Пара</label>
+      <select id="hwLessonSel">
+        <option value="">Выберите дату</option>
+      </select>
+      <label for="hwDesc">Текст ДЗ</label>
+      <textarea id="hwDesc" rows="4" placeholder="Условие, номера задач, ссылка…"></textarea>
+      <label for="hwFiles">Файлы (по желанию, можно несколько, до 20 МБ каждый)</label>
+      <input type="file" id="hwFiles" multiple />
+      <p id="hwUploadStatus" class="muted" style="margin: 6px 0 0"></p>
+      <button type="button" id="hwSubmit">Сохранить ДЗ</button>
+      <p id="hwFormMsg" class="muted" style="margin: 8px 0 0"></p>
+    </div>
+
+    <div id="elderDlPanel" class="card elder-hw-panel deadlines-elder" hidden>
+      <h2 class="block-title elder-hw-title">Староста: произвольный дедлайн</h2>
+      <p class="block-desc muted">
+        Как в боте «Новый дедлайн» / /set_deadline: отдельная запись для курсовой, сдачи отчёта и т.п.
+        Укажите дату и время в том же часовом поясе, что на сервере бота (часто Москва).
+      </p>
+      <label for="dlTitle">Заголовок</label>
+      <input type="text" id="dlTitle" maxlength="512" placeholder="Например: сдать реферат" />
+      <label for="dlDesc">Описание</label>
+      <textarea id="dlDesc" rows="3" placeholder="По желанию"></textarea>
+      <label for="dlWhen">Дата и время дедлайна</label>
+      <input type="datetime-local" id="dlWhen" />
+      <label for="dlSubject">Предмет (необязательно)</label>
+      <input type="text" id="dlSubject" maxlength="512" placeholder="Например: История" />
+      <button type="button" id="dlSubmit">Создать дедлайн</button>
+      <p id="dlFormMsg" class="muted" style="margin: 8px 0 0"></p>
+    </div>
+
+    <h2 class="section-heading">Активные дедлайны</h2>
+    <div id="list" class="deadlines-list">Загрузка…</div>
+    <p id="err" class="err"></p>
+    <script src="api.js"></script>
+    <script src="nav.js"></script>
+    <script>
+      function pluralDays(n) {
+        var a = Math.abs(n) % 100;
+        var b = a % 10;
+        if (a > 10 && a < 20) return n + " дней";
+        if (b > 1 && b < 5) return n + " дня";
+        if (b === 1) return n + " день";
+        return n + " дней";
+      }
+      function pluralHours(n) {
+        var a = Math.abs(n) % 100;
+        var b = a % 10;
+        if (a > 10 && a < 20) return n + " часов";
+        if (b > 1 && b < 5) return n + " часа";
+        if (b === 1) return n + " час";
+        return n + " часов";
+      }
+      function countdown(iso) {
+        var diff = new Date(iso) - Date.now();
+        if (diff <= 0) return "Истёк";
+        var days = Math.floor(diff / 86400000);
+        var hours = Math.floor((diff % 86400000) / 3600000);
+        if (days > 0) return "через " + pluralDays(days) + " " + pluralHours(hours);
+        var mins = Math.floor((diff % 3600000) / 60000);
+        if (hours > 0) return "через " + pluralHours(hours) + " " + mins + " мин";
+        return "через " + mins + " мин";
+      }
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+      function baseName(p) {
+        var i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+        return i >= 0 ? p.slice(i + 1) : p;
+      }
+      async function dl(path, name) {
+        try {
+          var q = new URLSearchParams({ path: path });
+          var blob = await SA.downloadWithAuth("/api/file?" + q.toString());
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = name || "file";
+          a.click();
+          URL.revokeObjectURL(a.href);
+        } catch (e) {
+          alert(String(e));
+        }
+      }
+
+      var deadlines = [];
+      var deadlinesUserIsElder = false;
+
+      function localTodayISO() {
+        var d = new Date();
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, "0");
+        var day = String(d.getDate()).padStart(2, "0");
+        return y + "-" + m + "-" + day;
+      }
+      function parseYMD(iso) {
+        var p = String(iso).slice(0, 10).split("-");
+        if (p.length !== 3) return null;
+        return new Date(+p[0], +p[1] - 1, +p[2], 12, 0, 0, 0);
+      }
+      function fmtISO(d) {
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, "0");
+        var day = String(d.getDate()).padStart(2, "0");
+        return y + "-" + m + "-" + day;
+      }
+      function mondayOfCalendarDateStr(dateStr) {
+        var d = parseYMD(dateStr);
+        if (!d) return dateStr.slice(0, 10);
+        var w = d.getDay();
+        var off = w === 0 ? -6 : 1 - w;
+        d.setDate(d.getDate() + off);
+        return fmtISO(d);
+      }
+
+      async function reloadDeadlines() {
+        var data = await SA.apiGet("/api/deadlines");
+        if (data.need_group) {
+          deadlines = [];
+          return data;
+        }
+        deadlines = data.items || [];
+        renderList();
+        return data;
+      }
+
+      function renderList() {
+        var el = document.getElementById("list");
+        if (!deadlines.length) {
+          el.innerHTML =
+            '<p class="muted deadlines-empty">Нет активных дедлайнов.</p>';
+          return;
+        }
+        el.innerHTML = deadlines
+          .map(function (d) {
+            var cd = countdown(d.deadline);
+            var subj = d.subject
+              ? '<span class="deadline-subject muted">' +
+                escapeHtml(d.subject) +
+                "</span>"
+              : "";
+            var desc = d.description
+              ? '<p class="deadline-desc">' + escapeHtml(d.description) + "</p>"
+              : "";
+            var files = (d.files || [])
+              .map(function (fp) {
+                var bn = baseName(fp);
+                return (
+                  '<button type="button" class="secondary deadline-file-btn" data-path="' +
+                  escapeHtml(fp) +
+                  '" data-name="' +
+                  escapeHtml(bn) +
+                  '">Скачать: ' +
+                  escapeHtml(bn) +
+                  "</button>"
+                );
+              })
+              .join("");
+            var delHw =
+              deadlinesUserIsElder && d.homework_id
+                ? '<p class="deadline-del-wrap"><button type="button" class="secondary hw-del-hw" data-hw-id="' +
+                  d.homework_id +
+                  '">Удалить ДЗ к паре</button></p>'
+                : "";
+            return (
+              '<article class="deadline-card">' +
+              '<div class="deadline-card-head"><strong class="deadline-title">' +
+              escapeHtml(d.title) +
+              "</strong>" +
+              (subj ? subj : "") +
+              "</div>" +
+              desc +
+              (files ? '<div class="deadline-files">' + files + "</div>" : "") +
+              delHw +
+              '<div class="countdown' +
+              (cd === "Истёк" ? " expired" : "") +
+              '">' +
+              escapeHtml(cd) +
+              "</div></article>"
+            );
+          })
+          .join("");
+        el.querySelectorAll(".deadline-file-btn").forEach(function (b) {
+          b.addEventListener("click", function () {
+            dl(b.getAttribute("data-path"), b.getAttribute("data-name"));
+          });
+        });
+        el.querySelectorAll(".hw-del-hw").forEach(function (b) {
+          b.addEventListener("click", async function () {
+            var hid = b.getAttribute("data-hw-id");
+            if (
+              !hid ||
+              !confirm(
+                "Удалить прикреплённое ДЗ к паре? Эта строка дедлайнов исчезнет."
+              )
+            ) {
+              return;
+            }
+            try {
+              await SA.apiDelete("/api/homework/" + hid);
+              await reloadDeadlines();
+            } catch (e) {
+              alert(String(e));
+            }
+          });
+        });
+      }
+
+      (async function () {
+        var el = document.getElementById("list");
+        var errEl = document.getElementById("err");
+        try {
+          var me = await SA.apiGet("/api/me");
+          deadlinesUserIsElder = !!(me.is_elder && me.study_group_id);
+          if (!me.study_group_id) {
+            document.getElementById("banner").innerHTML = SA.needGroupBanner;
+          }
+
+          if (me.is_elder && me.study_group_id) {
+            document.getElementById("elderPanel").hidden = false;
+            document.getElementById("elderDlPanel").hidden = false;
+            var dateInp = document.getElementById("hwLessonDate");
+            dateInp.value = localTodayISO();
+
+            async function refreshLessonSelect() {
+              var sel = document.getElementById("hwLessonSel");
+              var day = dateInp.value;
+              sel.innerHTML = '<option value="">Загрузка…</option>';
+              if (!day) {
+                sel.innerHTML = '<option value="">Выберите дату</option>';
+                return;
+              }
+              try {
+                var mon = mondayOfCalendarDateStr(day);
+                var wdata = await SA.apiGet(
+                  "/api/schedule/week_window?week_start=" + encodeURIComponent(mon)
+                );
+                var lessons = (wdata.items || []).filter(function (l) {
+                  return l.date === day;
+                });
+                if (!lessons.length) {
+                  sel.innerHTML =
+                    '<option value="">На эту дату пар нет в расписании</option>';
+                  return;
+                }
+                sel.innerHTML =
+                  '<option value="">Выберите пару</option>' +
+                  lessons
+                    .map(function (l) {
+                      var k = l.kind ? " (" + l.kind + ")" : "";
+                      var label = l.start + "–" + l.end + " · " + l.subject + k;
+                      return (
+                        '<option value="' +
+                        l.id +
+                        '">' +
+                        escapeHtml(label) +
+                        "</option>"
+                      );
+                    })
+                    .join("");
+              } catch (e) {
+                sel.innerHTML = '<option value="">Ошибка загрузки</option>';
+                errEl.textContent = String(e);
+              }
+            }
+
+            dateInp.addEventListener("change", refreshLessonSelect);
+            await refreshLessonSelect();
+
+            document.getElementById("hwSubmit").addEventListener("click", async function () {
+              var msg = document.getElementById("hwFormMsg");
+              var st = document.getElementById("hwUploadStatus");
+              msg.textContent = "";
+              st.textContent = "";
+              var sid = parseInt(document.getElementById("hwLessonSel").value, 10);
+              if (!sid) {
+                msg.textContent = "Выберите пару из списка.";
+                return;
+              }
+              var desc = document.getElementById("hwDesc").value.trim();
+              var filesInp = document.getElementById("hwFiles");
+              var files = filesInp.files ? Array.from(filesInp.files) : [];
+              var paths = [];
+              try {
+                for (var i = 0; i < files.length; i++) {
+                  st.textContent =
+                    "Загрузка файла " + (i + 1) + " / " + files.length + "…";
+                  var res = await SA.apiUploadFile("/api/homework/upload", files[i]);
+                  if (res.path) paths.push(res.path);
+                }
+                st.textContent = files.length ? "Файлы загружены, сохраняю…" : "Сохраняю…";
+                await SA.apiPost("/api/homework", {
+                  schedule_id: sid,
+                  description: desc,
+                  file_paths: paths,
+                });
+                msg.textContent = "Сохранено — смотри в списке ниже.";
+                document.getElementById("hwDesc").value = "";
+                filesInp.value = "";
+                st.textContent = "";
+                await reloadDeadlines();
+              } catch (e) {
+                msg.textContent = String(e);
+                st.textContent = "";
+              }
+            });
+
+            document.getElementById("dlSubmit").addEventListener("click", async function () {
+              var msg = document.getElementById("dlFormMsg");
+              msg.textContent = "";
+              var title = document.getElementById("dlTitle").value.trim();
+              var whenVal = document.getElementById("dlWhen").value;
+              if (!title) {
+                msg.textContent = "Введите заголовок.";
+                return;
+              }
+              if (!whenVal) {
+                msg.textContent = "Выберите дату и время дедлайна.";
+                return;
+              }
+              try {
+                await SA.apiPost("/api/deadlines", {
+                  title: title,
+                  description: document.getElementById("dlDesc").value.trim(),
+                  deadline: whenVal,
+                  subject: document.getElementById("dlSubject").value.trim(),
+                });
+                msg.textContent = "Создано — смотри в списке ниже.";
+                document.getElementById("dlTitle").value = "";
+                document.getElementById("dlDesc").value = "";
+                document.getElementById("dlSubject").value = "";
+                document.getElementById("dlWhen").value = "";
+                await reloadDeadlines();
+              } catch (e) {
+                msg.textContent = String(e);
+              }
+            });
+          }
+
+          var data = await reloadDeadlines();
+          if (data.need_group) {
+            document.getElementById("banner").innerHTML = SA.needGroupBanner;
+            el.textContent = "Дедлайны доступны после вступления в группу.";
+            return;
+          }
+          setInterval(renderList, 60000);
+        } catch (e) {
+          errEl.textContent = String(e);
+          el.textContent = "";
+        }
+      })();
+    </script>
+  </body>
+</html>

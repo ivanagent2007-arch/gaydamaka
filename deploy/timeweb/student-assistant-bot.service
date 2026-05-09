@@ -1,0 +1,21 @@
+[Unit]
+Description=Student assistant Telegram bot (aiogram + aiohttp webapp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=botuser
+Group=botuser
+WorkingDirectory=/home/botuser/student_assistant_bot
+Environment=PATH=/home/botuser/student_assistant_bot/.venv/bin
+EnvironmentFile=/home/botuser/student_assistant_bot/.env
+ExecStart=/home/botuser/student_assistant_bot/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+
+# Лимиты (при необходимости раскомментируйте)
+# MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

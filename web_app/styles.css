@@ -1,0 +1,861 @@
+:root {
+  --bg: #0f1419;
+  --card: #1a2332;
+  --text: #e7ecf3;
+  --muted: #8b9bb4;
+  --accent: #5b8cff;
+  --ok: #3dd68c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 12px 14px 72px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-bottom: max(72px, calc(56px + env(safe-area-inset-bottom)));
+}
+
+header {
+  display: block;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+/* Единый «лид» под заголовком вкладки */
+.app-page-lead {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  max-width: 36rem;
+}
+
+/* Заголовок секции вне карточки (как «Активные дедлайны») */
+.section-heading {
+  margin: 18px 0 10px;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+/* Заголовок блока внутри карточки */
+.block-title {
+  margin: 0 0 8px;
+  padding-bottom: 10px;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.block-desc {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.block-desc code {
+  font-size: 0.78em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Список строк внутри одной карточки (посещаемость, ДР, состав) */
+.list-in-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.list-in-card > .att-row,
+.list-in-card > .bday-row,
+.list-in-card > .member-row {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: rgba(15, 20, 25, 0.55);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.list-in-card > .bday-row.bday-today {
+  margin: 0;
+}
+
+@media (hover: hover) {
+  .list-in-card > .att-row:hover,
+  .list-in-card > .bday-row:hover,
+  .list-in-card > .member-row:hover {
+    border-color: rgba(91, 140, 255, 0.28);
+    background: rgba(91, 140, 255, 0.06);
+  }
+}
+
+.member-list-head {
+  margin: 0 0 4px;
+  font-size: 0.86rem;
+}
+
+/* Таблица внутри карточки (отчёт старосты) */
+.table-in-card {
+  margin-top: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: auto;
+  background: rgba(15, 20, 25, 0.35);
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-in-card table {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.table-in-card thead th {
+  background: rgba(91, 140, 255, 0.11);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 11px 10px;
+  white-space: nowrap;
+}
+
+.table-in-card td {
+  padding: 10px;
+  vertical-align: top;
+}
+
+.att-lessons-list {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.att-lessons-list li {
+  margin: 4px 0;
+}
+
+/* Тайный Санта: имя получателя */
+.santa-receiver {
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(91, 140, 255, 0.12);
+  border: 1px solid rgba(91, 140, 255, 0.22);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  text-align: center;
+}
+
+nav a {
+  color: var(--accent);
+  text-decoration: none;
+  margin-left: 10px;
+  font-size: 0.9rem;
+}
+
+body a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+body a:active {
+  opacity: 0.88;
+}
+
+.app-tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-around;
+  align-items: stretch;
+  padding: 6px 2px max(6px, env(safe-area-inset-bottom));
+  background: var(--card);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.app-tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px 4px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--muted);
+  text-decoration: none;
+  max-width: 26%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.app-tab.active {
+  color: var(--accent);
+  font-weight: 600;
+  background: rgba(91, 140, 255, 0.12);
+}
+
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.lesson {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  margin-bottom: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid #2a3548;
+}
+
+input,
+select,
+button,
+textarea {
+  width: 100%;
+  margin: 6px 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #2a3548;
+  background: #121a26;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+button {
+  background: var(--accent);
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #2a3548;
+}
+
+.err {
+  color: #ff7b7b;
+  font-size: 0.85rem;
+}
+
+.need-group {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 180, 80, 0.18);
+  border: 1px solid rgba(255, 180, 80, 0.45);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* --- More popup --- */
+.app-tab-more {
+  background: none;
+  border: none;
+  width: auto;
+  margin: 0;
+  padding: 8px 4px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.more-popup {
+  position: fixed;
+  bottom: 56px;
+  right: 8px;
+  z-index: 200;
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.45);
+  padding: 6px 0;
+  min-width: 180px;
+}
+
+.more-item {
+  display: block;
+  padding: 12px 18px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.92rem;
+  transition: background 0.15s;
+}
+
+.more-item:hover,
+.more-item:active {
+  background: rgba(91, 140, 255, 0.1);
+}
+
+.more-item.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* --- Deadline cards (мини-приложение «Дедлайны») --- */
+.deadline-card {
+  margin: 0;
+  padding: 14px 16px 12px;
+  background: rgba(15, 20, 25, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (hover: hover) {
+  .deadline-card:hover {
+    border-color: rgba(91, 140, 255, 0.35);
+    background: rgba(91, 140, 255, 0.06);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.deadline-card-head {
+  margin-bottom: 4px;
+}
+
+.deadline-title {
+  display: block;
+  font-size: 1.03rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin: 0 0 4px;
+}
+
+.deadline-subject {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.deadline-desc {
+  margin: 10px 0 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.deadline-files {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deadline-file-btn {
+  width: 100%;
+  margin: 0 !important;
+  text-align: left;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.deadline-del-wrap {
+  margin: 12px 0 0;
+}
+
+.deadline-del-wrap .secondary {
+  width: 100%;
+}
+
+.countdown {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(91, 140, 255, 0.14);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.86rem;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  line-height: 1.35;
+}
+
+.countdown.expired {
+  background: rgba(255, 123, 123, 0.16);
+  color: #ff7b7b;
+}
+
+/* --- Attendance rows --- */
+.att-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.att-row:last-child {
+  border-bottom: none;
+}
+
+.att-info {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.att-btn {
+  flex-shrink: 0;
+  width: auto;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.att-btn.att-done {
+  background: var(--ok);
+  color: #0f1419;
+  cursor: default;
+}
+
+/* --- Birthday rows --- */
+.bday-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bday-row:last-child {
+  border-bottom: none;
+}
+
+.bday-row.bday-today {
+  background: rgba(61, 214, 140, 0.08);
+  border-radius: 10px;
+  padding: 10px;
+  margin: -2px -6px;
+}
+
+.bday-info {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.bday-badge {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(91, 140, 255, 0.12);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.bday-badge.today {
+  background: rgba(61, 214, 140, 0.18);
+  color: var(--ok);
+}
+
+/* --- Schedule tab: week + day + lessons --- */
+.schedule-panel {
+  margin-top: 4px;
+}
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.week-nav-btn {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 14px;
+  min-width: 44px;
+}
+
+.week-label {
+  flex: 1;
+  text-align: center;
+  font-size: 0.88rem;
+  margin: 0;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.day-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  justify-content: space-between;
+  overflow-x: auto;
+  margin-bottom: 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.day-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.day-chip {
+  width: auto;
+  min-width: 40px;
+  flex: 1 1 0;
+  margin: 0;
+  padding: 8px 4px;
+  background: #121a26;
+  border: 1px solid #2a3548;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.day-chip-dow {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.day-chip-num {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.day-chip.active {
+  background: rgba(91, 140, 255, 0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.day-chip.active .day-chip-num {
+  color: var(--accent);
+}
+
+.day-chip.has-lessons:not(.active) .day-chip-num {
+  font-weight: 600;
+}
+
+.lessons-card {
+  min-height: 80px;
+}
+
+.lessons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lesson-row {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  text-align: left;
+  background: #121a26;
+  border: 1px solid #2a3548;
+  border-radius: 12px;
+  padding: 12px 22px 12px 12px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.35;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (hover: hover) {
+  .lesson-row:hover {
+    border-color: rgba(91, 140, 255, 0.35);
+    background: rgba(91, 140, 255, 0.08);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  }
+}
+
+.lesson-row:active {
+  background: #1a2636;
+  border-color: rgba(91, 140, 255, 0.25);
+}
+
+.lesson-slot-num {
+  display: inline-block;
+  min-width: 1.35em;
+  margin-right: 4px;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.88em;
+}
+
+.lesson-row-cont {
+  margin-top: -6px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-left: 3px solid rgba(91, 140, 255, 0.35);
+  padding-left: 15px;
+}
+
+.hw-dot {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+.lesson-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.lesson-modal[hidden] {
+  display: none !important;
+}
+
+.lesson-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.52);
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.lesson-modal-sheet {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 520px;
+  border-radius: 16px 16px 0 0;
+  max-height: 88vh;
+  overflow-y: auto;
+  margin: 0;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.lesson-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lesson-modal-title {
+  font-size: 1rem;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.lesson-modal-close {
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
+  padding: 6px 12px;
+}
+
+.lesson-modal-meta {
+  margin: 8px 0 12px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.lesson-modal-body .hw-entry {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.lesson-modal-body .hw-entry:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.lesson-modal-body .hw-desc {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+.lesson-modal-body .hw-file-btn {
+  width: 100%;
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+.lesson-modal-body .hw-entry-num {
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+}
+
+.modal-elder-hw {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-elder-hw-title {
+  font-size: 0.95rem;
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.modal-elder-hw label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 10px 0 4px;
+}
+
+.modal-elder-hw textarea {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+}
+
+.modal-elder-hw input[type="file"] {
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+}
+
+.modal-elder-hw #modalElderHwSave {
+  margin-top: 12px;
+}
+
+.elder-hw-panel .elder-hw-title {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+.elder-hw-panel textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.elder-hw-panel input[type="file"] {
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+}
+
+.att-report-sum {
+  margin: 10px 0 12px;
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.att-report-sum-ok strong {
+  color: #9ccc65;
+}
+
+.att-report-sum-warn strong {
+  color: #ffb74d;
+}
+
+.member-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.member-row:last-child {
+  border-bottom: none;
+}
+
+.member-info {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.member-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Глобально у button width:100% — кнопки в строке участника не на всю ширину */
+.member-row .member-kick-btn,
+.member-row .member-deputy-btn {
+  flex-shrink: 0;
+  align-self: flex-end;
+  width: auto;
+  margin: 0;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  padding: 6px 10px;
+}

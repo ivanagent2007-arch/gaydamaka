@@ -1,0 +1,45 @@
+Запуск мини-приложения (Telegram Web App)
+==========================================
+
+1) Python 3.11+ (в т.ч. 3.14). Зависимости подобраны так, чтобы ставились готовые wheels
+   (aiogram 3.27 + pydantic-core с cp314), без Rust.
+   venv (по желанию): python -m venv .venv  →  .venv\Scripts\activate
+   Из корня БОТИНОК-ТГ или из student_assistant_bot:
+   pip install -r requirements.txt
+
+2) Файл .env
+   Скопируй .env.example в .env и укажи BOT_TOKEN от @BotFather.
+
+3) HTTPS для Telegram (обязательно для кнопки Web App)
+   Вариант A — ngrok: https://ngrok.com/download
+     В отдельном окне терминала:
+       ngrok http 8080
+     В .env поставь:
+       WEBAPP_PUBLIC_URL=https://<то_что_выдал_ngrok>
+     Без слэша на конце.
+
+   Вариант B — Cloudflare Tunnel (cloudflared) или свой домен с TLS.
+
+4) Запуск бота (поднимает и polling, и веб на порту WEBAPP_PORT)
+   python main.py
+   Или из PowerShell: .\run_mini_app.ps1
+
+5) Кнопка в Telegram
+   Уже настроена в коде: «Мини-приложение» в меню использует
+   WEBAPP_PUBLIC_URL/index.html
+   Дополнительно в @BotFather можно задать Menu Button:
+   /mybots → бот → Bot Settings → Menu Button → укажи тот же URL .../index.html
+
+6) Первый вход
+   Пользователь должен написать боту /start и быть в группе (код от старосты),
+   иначе API вернёт «not registered» или «need group».
+
+7) Если страница не открывается
+   - Проверь, что WEBAPP_PUBLIC_URL начинается с https://
+   - ngrok и бот должны быть запущены одновременно
+   - Порт WEBAPP_PORT (по умолчанию 8080) должен совпадать с тем, куда смотрит туннель
+
+8) Поддомен Timeweb (*.tw1.ru) вместо туннеля
+   В .env на сервере: WEBAPP_PUBLIC_URL=https://твой-поддомен.ЛОГИН.tw1.ru
+   Поддомен должен проксироваться на порт WEBAPP_PORT (см. deploy/timeweb/TIMEWEB_WEBAPP_DOMAIN.txt).
+   Пока открывается заглушка «аккаунт готов» — запросы не доходят до Python, настрой прокси в панели.

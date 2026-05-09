@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Посещаемость</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Посещаемость</h1>
+      <p class="app-page-lead muted">
+        Отметься на сегодняшние пары. Староста видит сводку по группе за выбранную дату.
+      </p>
+    </header>
+    <div id="banner"></div>
+
+    <div id="elderReportWrap" class="card" hidden style="margin-bottom: 14px">
+      <h2 class="block-title">Отчёт по группе</h2>
+      <p class="block-desc muted">
+        Выбери дату — для каждого студента: сколько пар расписания на этот день отмечено как «был»
+        (как у отчёта старосты в боте).
+      </p>
+      <label for="repDate">Дата</label>
+      <input type="date" id="repDate" />
+      <button type="button" id="repLoad">Показать</button>
+      <p id="repErr" class="err"></p>
+      <div id="repOut"></div>
+    </div>
+
+    <h2 id="myAttHeading" class="section-heading" style="margin-top: 4px" hidden>
+      Сегодня — отметиться
+    </h2>
+    <div id="list" class="card list-in-card">Загрузка…</div>
+    <p id="err" class="err"></p>
+    <script src="api.js"></script>
+    <script src="nav.js"></script>
+    <script>
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function localTodayISO() {
+        var d = new Date();
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, "0");
+        var day = String(d.getDate()).padStart(2, "0");
+        return y + "-" + m + "-" + day;
+      }
+
+      function fmtRuDateFromISO(iso) {
+        var p = String(iso || "").slice(0, 10).split("-");
+        if (p.length !== 3) return iso;
+        return p[2] + "." + p[1] + "." + p[0];
+      }
+
+      async function markAttendance(btn, scheduleId) {
+        btn.disabled = true;
+        btn.textContent = "…";
+        try {
+          await SA.apiPost("/api/attendance", { schedule_id: scheduleId });
+          btn.textContent = "Отмечен ✓";
+          btn.classList.add("att-done");
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = "Ошибка";
+          alert(String(e));
+        }
+      }
+
+      function renderGroupReport(data) {
+        var out = document.getElementById("repOut");
+        var y = data.lesson_slots_count || 0;
+        var head =
+          "<p class=\"muted\" style=\"margin:0 0 8px\"><strong>" +
+          escapeHtml(data.group_name || "") +
+          "</strong> · " +
+          escapeHtml(fmtRuDateFromISO(data.date)) +
+          " · слотов в расписании: <strong>" +
+          y +
+          "</strong></p>";
+
+        if (!y) {
+          out.innerHTML =
+            head +
+            '<p class="muted">В расписании на этот день нет пар — сводку по отметкам не считаем.</p>';
+          return;
+        }
+
+        var studs = data.students || [];
+        var sumBlock = "";
+        var ft = data.students_total != null ? data.students_total : studs.length;
+        var fully =
+          data.students_fully_marked_count != null
+            ? data.students_fully_marked_count
+            : 0;
+        var anym =
+          data.students_with_any_mark_count != null
+            ? data.students_with_any_mark_count
+            : 0;
+        if (ft > 0) {
+          if (data.all_students_fully_marked) {
+            sumBlock =
+              '<p class="att-report-sum att-report-sum-ok"><strong>Все студенты отметились</strong> на все пары этого дня (' +
+              fully +
+              " из " +
+              ft +
+              ").</p>";
+          } else {
+            sumBlock =
+              '<p class="att-report-sum att-report-sum-warn"><strong>Не все отметились.</strong> На все пары дня отметились: ' +
+              fully +
+              " из " +
+              ft +
+              ". Хотя бы одну пару: " +
+              anym +
+              " из " +
+              ft +
+              ".</p>";
+          }
+        }
+
+        var lessons = (data.lessons || [])
+          .map(function (l) {
+            var k = l.kind ? " (" + escapeHtml(l.kind) + ")" : "";
+            var c =
+              l.contingent && String(l.contingent).trim()
+                ? " · " + escapeHtml(String(l.contingent).trim())
+                : "";
+            return (
+              "<li>" +
+              escapeHtml(l.start) +
+              "–" +
+              escapeHtml(l.end) +
+              " · " +
+              escapeHtml(l.subject) +
+              k +
+              c +
+              "</li>"
+            );
+          })
+          .join("");
+        var lessonsBlock =
+          '<p class="muted" style="margin:8px 0 4px;font-size:0.82rem">Пары дня</p><ul class="att-lessons-list">' +
+          lessons +
+          "</ul>";
+
+        if (!studs.length) {
+          out.innerHTML =
+            head +
+            sumBlock +
+            lessonsBlock +
+            '<p class="muted">Нет студентов с ролью student в группе.</p>';
+          return;
+        }
+
+        var rows = studs
+          .map(function (s) {
+            return (
+              "<tr><td>" +
+              escapeHtml(s.full_name) +
+              "</td><td>" +
+              escapeHtml(String(s.present)) +
+              " / " +
+              escapeHtml(String(s.total)) +
+              "</td></tr>"
+            );
+          })
+          .join("");
+        out.innerHTML =
+          head +
+          sumBlock +
+          lessonsBlock +
+          '<div class="table-in-card"><table><thead><tr><th>Студент</th><th>Отмечено</th></tr></thead><tbody>' +
+          rows +
+          "</tbody></table></div>";
+      }
+
+      async function loadGroupReport() {
+        var repErr = document.getElementById("repErr");
+        repErr.textContent = "";
+        var d = document.getElementById("repDate").value;
+        if (!d) {
+          repErr.textContent = "Выберите дату.";
+          return;
+        }
+        try {
+          var data = await SA.apiGet(
+            "/api/attendance/group_report?date=" + encodeURIComponent(d)
+          );
+          if (data.need_group) {
+            document.getElementById("repOut").innerHTML = "";
+            return;
+          }
+          renderGroupReport(data);
+        } catch (e) {
+          repErr.textContent = String(e);
+          document.getElementById("repOut").innerHTML = "";
+        }
+      }
+
+      async function loadMyToday() {
+        var el = document.getElementById("list");
+        var data = await SA.apiGet("/api/attendance");
+        if (data.need_group) {
+          document.getElementById("banner").innerHTML = SA.needGroupBanner;
+          el.textContent = "Посещаемость доступна после вступления в группу.";
+          return;
+        }
+        if (!data.items.length) {
+          el.textContent = "Сегодня нет пар.";
+          return;
+        }
+        el.innerHTML = "";
+        data.items.forEach(function (item) {
+          var div = document.createElement("div");
+          div.className = "att-row";
+          var info = document.createElement("div");
+          info.className = "att-info";
+          var kind = item.kind ? " (" + escapeHtml(item.kind) + ")" : "";
+          var citem =
+            item.contingent && String(item.contingent).trim()
+              ? "<br/><span class=\"muted\">" +
+                escapeHtml(String(item.contingent).trim()) +
+                "</span>"
+              : "";
+          info.innerHTML =
+            "<strong>" +
+            escapeHtml(item.start) +
+            "–" +
+            escapeHtml(item.end) +
+            "</strong><br/>" +
+            escapeHtml(item.subject) +
+            kind +
+            citem;
+          div.appendChild(info);
+
+          var btn = document.createElement("button");
+          if (item.marked) {
+            btn.textContent = "Отмечен ✓";
+            btn.className = "att-btn att-done";
+            btn.disabled = true;
+          } else {
+            btn.textContent = "Отметиться";
+            btn.className = "att-btn";
+            btn.addEventListener("click", function () {
+              markAttendance(btn, item.id);
+            });
+          }
+          div.appendChild(btn);
+          el.appendChild(div);
+        });
+      }
+
+      (async function () {
+        var el = document.getElementById("list");
+        var errEl = document.getElementById("err");
+        try {
+          var me = await SA.apiGet("/api/me");
+          if (!me.study_group_id) {
+            document.getElementById("banner").innerHTML = SA.needGroupBanner;
+            el.textContent = "Посещаемость доступна после вступления в группу.";
+            return;
+          }
+
+          if (me.is_elder) {
+            document.getElementById("elderReportWrap").hidden = false;
+            document.getElementById("myAttHeading").hidden = false;
+            var repDate = document.getElementById("repDate");
+            repDate.value = localTodayISO();
+            document.getElementById("repLoad").addEventListener("click", loadGroupReport);
+            repDate.addEventListener("change", loadGroupReport);
+            try {
+              await loadGroupReport();
+            } catch (repEx) {
+              document.getElementById("repErr").textContent = String(repEx);
+            }
+          }
+
+          try {
+            await loadMyToday();
+          } catch (e2) {
+            errEl.textContent = String(e2);
+            el.textContent = "";
+          }
+        } catch (e) {
+          errEl.textContent = String(e);
+          el.textContent = "";
+        }
+      })();
+    </script>
+  </body>
+</html>

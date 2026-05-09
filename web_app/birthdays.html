@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Дни рождения</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Дни рождения</h1>
+      <p class="app-page-lead muted">Одногруппники и скоро ли день рождения.</p>
+    </header>
+    <div id="banner"></div>
+    <div id="list" class="card list-in-card">Загрузка…</div>
+    <p id="err" class="err"></p>
+    <script src="api.js"></script>
+    <script src="nav.js"></script>
+    <script>
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+      function pluralDays(n) {
+        if (n === 0) return "сегодня!";
+        var a = Math.abs(n) % 100;
+        var b = a % 10;
+        var w;
+        if (a > 10 && a < 20) w = "дней";
+        else if (b > 1 && b < 5) w = "дня";
+        else if (b === 1) w = "день";
+        else w = "дней";
+        return "через " + n + " " + w;
+      }
+
+      (async function () {
+        var el = document.getElementById("list");
+        try {
+          var data = await SA.apiGet("/api/birthdays");
+          if (data.need_group) {
+            document.getElementById("banner").innerHTML = SA.needGroupBanner;
+            el.textContent = "Информация доступна после вступления в группу.";
+            return;
+          }
+          if (!data.items.length) {
+            el.textContent = "Нет данных о днях рождения.";
+            return;
+          }
+          el.innerHTML = "";
+          data.items.forEach(function (p) {
+            var div = document.createElement("div");
+            div.className = "bday-row";
+            var isToday = p.days_left === 0;
+            if (isToday) div.classList.add("bday-today");
+
+            var info = document.createElement("div");
+            info.className = "bday-info";
+            info.innerHTML =
+              "<strong>" + escapeHtml(p.name) + "</strong><br/>" +
+              '<span class="muted">' + escapeHtml(p.display) + "</span>";
+            div.appendChild(info);
+
+            var badge = document.createElement("div");
+            badge.className = "bday-badge" + (isToday ? " today" : "");
+            badge.textContent = pluralDays(p.days_left);
+            div.appendChild(badge);
+
+            el.appendChild(div);
+          });
+        } catch (e) {
+          document.getElementById("err").textContent = String(e);
+          el.textContent = "";
+        }
+      })();
+    </script>
+  </body>
+</html>

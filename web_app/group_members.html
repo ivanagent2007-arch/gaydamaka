@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Состав группы</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Состав группы</h1>
+      <p id="hint" class="app-page-lead muted"></p>
+    </header>
+    <div id="banner"></div>
+    <div id="list" class="card list-in-card">Загрузка…</div>
+    <p id="err" class="err"></p>
+    <script src="api.js"></script>
+    <script src="nav.js"></script>
+    <script>
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function roleLabel(role) {
+        if (role === "elder") return "староста";
+        if (role === "deputy_elder") return "зам. старосты";
+        return "студент";
+      }
+
+      async function kickMember(id, name) {
+        if (
+          !confirm(
+            "Исключить «" + name + "» из группы? У человека пропадёт доступ к расписанию и материалам."
+          )
+        ) {
+          return;
+        }
+        try {
+          document.getElementById("err").textContent = "";
+          await SA.apiPost("/api/group/kick", { user_id: id });
+          await load();
+        } catch (e) {
+          document.getElementById("err").textContent = String(e);
+        }
+      }
+
+      async function appointDeputy(id, name) {
+        if (
+          !confirm(
+            "Назначить «" + name + "» заместителем старосты? Прежний зам (если был) будет снят."
+          )
+        ) {
+          return;
+        }
+        try {
+          document.getElementById("err").textContent = "";
+          await SA.apiPost("/api/group/deputy", { user_id: id });
+          await load();
+        } catch (e) {
+          document.getElementById("err").textContent = String(e);
+        }
+      }
+
+      async function demoteDeputy() {
+        if (!confirm("Снять заместителя с должности? Он останется в группе как студент.")) {
+          return;
+        }
+        try {
+          document.getElementById("err").textContent = "";
+          await SA.apiPost("/api/group/deputy", { user_id: null });
+          await load();
+        } catch (e) {
+          document.getElementById("err").textContent = String(e);
+        }
+      }
+
+      async function load() {
+        var el = document.getElementById("list");
+        var hint = document.getElementById("hint");
+        try {
+          var me = await SA.apiGet("/api/me");
+          var data = await SA.apiGet("/api/group/members");
+          if (data.need_group || !me.study_group_id) {
+            document.getElementById("banner").innerHTML = SA.needGroupBanner;
+            el.textContent = "Доступно после вступления в группу.";
+            hint.textContent = "";
+            return;
+          }
+          if (me.is_chief_elder) {
+            hint.textContent =
+              "Ты староста: можешь исключать студентов и заместителя, назначать зама. Старосту через бота исключить нельзя.";
+          } else if (me.is_elder) {
+            hint.textContent =
+              "Ты заместитель: те же права, что у старосты, кроме исключения из группы и назначения зама.";
+          } else {
+            hint.textContent = "Список одногруппников.";
+          }
+          if (!data.items.length) {
+            el.textContent = "В группе пока никого нет.";
+            return;
+          }
+          el.innerHTML = "";
+          var title = document.createElement("div");
+          title.className = "member-list-head muted";
+          title.textContent = "«" + data.group_name + "» · " + data.items.length + " чел.";
+          el.appendChild(title);
+          data.items.forEach(function (m) {
+            var row = document.createElement("div");
+            row.className = "member-row";
+            var info = document.createElement("div");
+            info.className = "member-info";
+            info.innerHTML =
+              "<strong>" +
+              escapeHtml(m.full_name || "—") +
+              "</strong><br/><span class=\"muted\">" +
+              escapeHtml(roleLabel(m.role)) +
+              "</span>";
+            row.appendChild(info);
+
+            var chief = !!me.is_chief_elder;
+            var canKick =
+              chief && m.role !== "elder" && m.id !== me.db_user_id;
+            var canAppointDeputy =
+              chief && m.role === "student" && m.id !== me.db_user_id;
+            var canDemoteDeputy = chief && m.role === "deputy_elder";
+
+            if (canKick || canAppointDeputy || canDemoteDeputy) {
+              var actions = document.createElement("div");
+              actions.className = "member-actions";
+              if (canKick) {
+                var kickBtn = document.createElement("button");
+                kickBtn.type = "button";
+                kickBtn.className = "secondary member-kick-btn";
+                kickBtn.textContent = "Исключить";
+                kickBtn.addEventListener("click", function () {
+                  kickMember(m.id, m.full_name || "");
+                });
+                actions.appendChild(kickBtn);
+              }
+              if (canAppointDeputy) {
+                var depBtn = document.createElement("button");
+                depBtn.type = "button";
+                depBtn.className = "secondary member-deputy-btn";
+                depBtn.textContent = "Заместитель";
+                depBtn.addEventListener("click", function () {
+                  appointDeputy(m.id, m.full_name || "");
+                });
+                actions.appendChild(depBtn);
+              }
+              if (canDemoteDeputy) {
+                var demBtn = document.createElement("button");
+                demBtn.type = "button";
+                demBtn.className = "secondary member-deputy-btn";
+                demBtn.textContent = "Снять зама";
+                demBtn.addEventListener("click", function () {
+                  demoteDeputy();
+                });
+                actions.appendChild(demBtn);
+              }
+              row.appendChild(actions);
+            }
+            el.appendChild(row);
+          });
+        } catch (e) {
+          document.getElementById("err").textContent = String(e);
+          el.textContent = "";
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>

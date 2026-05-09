@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Расписание</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Расписание</h1>
+      <p class="app-page-lead muted">
+        Помощник группы. У пары показан поток или подгруппа (данные РУЗ).
+      </p>
+    </header>
+    <div id="banner"></div>
+    <div id="userLine" class="card muted">Загрузка…</div>
+
+    <section id="schedulePanel" class="schedule-panel" hidden>
+      <div class="week-nav card">
+        <button type="button" id="weekPrev" class="week-nav-btn secondary" aria-label="Предыдущая неделя">
+          ←
+        </button>
+        <div id="weekLabel" class="week-label">…</div>
+        <button type="button" id="weekNext" class="week-nav-btn secondary" aria-label="Следующая неделя">
+          →
+        </button>
+      </div>
+      <div id="dayChips" class="day-chips card" role="tablist" aria-label="День недели"></div>
+      <div id="lessonsCard" class="card lessons-card">
+        <p id="lessonsPlaceholder" class="muted" style="margin: 0">Выберите день.</p>
+        <div id="lessonsList" class="lessons-list" hidden></div>
+      </div>
+    </section>
+
+    <p id="err" class="err"></p>
+
+    <div id="lessonModal" class="lesson-modal" hidden>
+      <button type="button" class="lesson-modal-backdrop" id="lessonModalBackdrop" aria-label="Закрыть"></button>
+      <div class="lesson-modal-sheet card">
+        <div class="lesson-modal-head">
+          <h2 id="modalTitle" class="lesson-modal-title">Пара</h2>
+          <button type="button" id="lessonModalClose" class="lesson-modal-close secondary" aria-label="Закрыть">
+            ✕
+          </button>
+        </div>
+        <p id="modalMeta" class="muted lesson-modal-meta"></p>
+        <div id="modalBody" class="lesson-modal-body"></div>
+      </div>
+    </div>
+
+    <script src="api.js"></script>
+    <script src="nav.js"></script>
+    <script>
+      const DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+      function localTodayISO() {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return y + "-" + m + "-" + day;
+      }
+
+      function parseISODateOnly(iso) {
+        const p = String(iso).slice(0, 10).split("-");
+        if (p.length !== 3) return null;
+        const y = +p[0],
+          mo = +p[1] - 1,
+          da = +p[2];
+        if (!y || mo < 0 || mo > 11 || !da) return null;
+        return new Date(y, mo, da, 12, 0, 0, 0);
+      }
+
+      function addDays(d, n) {
+        const x = new Date(d.getTime());
+        x.setDate(x.getDate() + n);
+        return x;
+      }
+
+      function fmtISO(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return y + "-" + m + "-" + day;
+      }
+
+      function weekDaysISO(weekMondayISO) {
+        const mon = parseISODateOnly(weekMondayISO);
+        if (!mon) return [];
+        const out = [];
+        for (let i = 0; i < 7; i++) out.push(fmtISO(addDays(mon, i)));
+        return out;
+      }
+
+      function formatWeekLabel(weekMondayISO) {
+        const mon = parseISODateOnly(weekMondayISO);
+        if (!mon) return weekMondayISO;
+        const sun = addDays(mon, 6);
+        const o1 = { day: "numeric", month: "short" };
+        const o2 = { day: "numeric", month: "short", year: "numeric" };
+        return (
+          mon.toLocaleDateString("ru-RU", o1) +
+          " — " +
+          sun.toLocaleDateString("ru-RU", o2)
+        );
+      }
+
+      function pickDefaultDay(weekMondayISO, items) {
+        const days = weekDaysISO(weekMondayISO);
+        const t = localTodayISO();
+        if (days.includes(t)) return t;
+        const withLesson = days.find((dy) => items.some((l) => l.date === dy));
+        return withLesson || days[0] || t;
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) =>
+          (
+            {
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            }
+          )[c]
+        );
+      }
+
+      /** Как в боте: один номер слота на одно время начала (параллельные пары — один номер). */
+      function lessonSlotIndices(rows) {
+        const nums = [];
+        let slot = 0;
+        let prevStart = null;
+        for (const s of rows) {
+          const st = String(s.start || "").trim();
+          if (st !== prevStart) {
+            slot += 1;
+            prevStart = st;
+          }
+          nums.push(slot);
+        }
+        return nums;
+      }
+
+      /** Как _lesson_visual_merge_key в handlers/schedule.py: предмет + тип + время начала. */
+      function lessonMergeKeySch(s) {
+        return (
+          String(s.subject || "")
+            .trim()
+            .toLocaleLowerCase("ru-RU") +
+          "|" +
+          String(s.kind || "")
+            .trim()
+            .toLocaleLowerCase("ru-RU") +
+          "|" +
+          String(s.start || "").trim()
+        );
+      }
+
+      function baseName(p) {
+        const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+        return i >= 0 ? p.slice(i + 1) : p;
+      }
+
+      (async () => {
+        const errEl = document.getElementById("err");
+        const banner = document.getElementById("banner");
+        const panel = document.getElementById("schedulePanel");
+        const weekLabel = document.getElementById("weekLabel");
+        const dayChips = document.getElementById("dayChips");
+        const lessonsList = document.getElementById("lessonsList");
+        const lessonsPlaceholder = document.getElementById("lessonsPlaceholder");
+        const modal = document.getElementById("lessonModal");
+        const modalTitle = document.getElementById("modalTitle");
+        const modalMeta = document.getElementById("modalMeta");
+        const modalBody = document.getElementById("modalBody");
+
+        let weekMondayISO = null;
+        let itemsAll = [];
+        let selectedDay = null;
+        let meIsElder = false;
+
+        function setWeekFromResponse(data, preserveDayISO) {
+          weekMondayISO = data.week_start;
+          itemsAll = data.items || [];
+          weekLabel.textContent = formatWeekLabel(weekMondayISO);
+          const days = weekDaysISO(weekMondayISO);
+          selectedDay =
+            preserveDayISO && days.includes(preserveDayISO)
+              ? preserveDayISO
+              : pickDefaultDay(weekMondayISO, itemsAll);
+          renderDayChips();
+          renderLessonsForDay();
+        }
+
+        async function loadWeek(weekStartQuery, preserveDayISO) {
+          const q = weekStartQuery
+            ? "?week_start=" + encodeURIComponent(weekStartQuery)
+            : "";
+          const data = await SA.apiGet("/api/schedule/week_window" + q);
+          if (data.need_group) {
+            if (!banner.innerHTML) banner.innerHTML = SA.needGroupBanner;
+            panel.hidden = true;
+            return false;
+          }
+          panel.hidden = false;
+          setWeekFromResponse(data, preserveDayISO);
+          return true;
+        }
+
+        function renderDayChips() {
+          const days = weekDaysISO(weekMondayISO);
+          dayChips.innerHTML = "";
+          days.forEach((iso, idx) => {
+            const d = parseISODateOnly(iso);
+            const label = DAY_SHORT[idx] || "";
+            const num = d ? d.getDate() : "";
+            const has = itemsAll.some((l) => l.date === iso);
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "day-chip" + (iso === selectedDay ? " active" : "");
+            if (has) b.classList.add("has-lessons");
+            b.setAttribute("role", "tab");
+            b.setAttribute("aria-selected", iso === selectedDay ? "true" : "false");
+            b.dataset.day = iso;
+            b.innerHTML =
+              '<span class="day-chip-dow">' +
+              escapeHtml(label) +
+              "</span>" +
+              '<span class="day-chip-num">' +
+              escapeHtml(String(num)) +
+              "</span>";
+            b.addEventListener("click", () => {
+              selectedDay = iso;
+              renderDayChips();
+              renderLessonsForDay();
+            });
+            dayChips.appendChild(b);
+          });
+        }
+
+        function renderLessonsForDay() {
+          const list = itemsAll
+            .filter((l) => l.date === selectedDay)
+            .slice()
+            .sort((a, b) => String(a.start).localeCompare(String(b.start)));
+          if (!list.length) {
+            lessonsList.hidden = true;
+            lessonsPlaceholder.hidden = false;
+            lessonsPlaceholder.textContent = "На этот день пар нет.";
+            return;
+          }
+          lessonsPlaceholder.hidden = true;
+          lessonsList.hidden = false;
+          const slotNums = lessonSlotIndices(list);
+          let prevKey = null;
+          const parts = list.map((l, i) => {
+            const key = lessonMergeKeySch(l);
+            const isCont = prevKey !== null && key === prevKey;
+            prevKey = key;
+            const num = slotNums[i];
+            const kind =
+              l.kind && String(l.kind).trim()
+                ? ' <span class="muted">(' + escapeHtml(String(l.kind).trim()) + ")</span>"
+                : "";
+            const cont =
+              l.contingent && String(l.contingent).trim()
+                ? '<br/><span class="muted">🎓 ' +
+                  escapeHtml(String(l.contingent).trim()) +
+                  "</span>"
+                : "";
+            const dot = l.has_homework
+              ? '<span class="hw-dot" title="Есть ДЗ или материалы"></span>'
+              : "";
+            const teach = escapeHtml((l.teacher || "").trim() || "—");
+            const room = escapeHtml((l.room || "").trim() || "—");
+            const timeLine =
+              "<strong>" +
+              escapeHtml(l.start) +
+              "–" +
+              escapeHtml(l.end) +
+              '</strong><span class="muted"> · ' +
+              teach +
+              " · " +
+              room +
+              "</span>";
+            if (isCont) {
+              return (
+                '<button type="button" class="lesson-row lesson-row-cont" data-lesson-id="' +
+                l.id +
+                '">' +
+                dot +
+                timeLine +
+                "</button>"
+              );
+            }
+            return (
+              '<button type="button" class="lesson-row" data-lesson-id="' +
+              l.id +
+              '">' +
+              dot +
+              '<span class="lesson-slot-num">' +
+              num +
+              '.</span> <strong>' +
+              escapeHtml(l.subject || "") +
+              "</strong>" +
+              kind +
+              cont +
+              "<br/>" +
+              timeLine +
+              "</button>"
+            );
+          });
+          lessonsList.innerHTML = parts.join("");
+          lessonsList.querySelectorAll(".lesson-row").forEach((btn) => {
+            btn.addEventListener("click", () =>
+              openLessonModal(+btn.getAttribute("data-lesson-id"))
+            );
+          });
+        }
+
+        function wireHwFileButtons(scope) {
+          (scope || modalBody).querySelectorAll(".hw-file-btn").forEach((b) => {
+            b.addEventListener("click", async () => {
+              const path = b.getAttribute("data-path");
+              const name = b.getAttribute("data-name") || "file";
+              try {
+                const q = new URLSearchParams({ path });
+                const blob = await SA.downloadWithAuth("/api/file?" + q.toString());
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = name;
+                a.click();
+                URL.revokeObjectURL(a.href);
+              } catch (e) {
+                alert(String(e));
+              }
+            });
+          });
+        }
+
+        async function openLessonModal(scheduleId) {
+          try {
+            errEl.textContent = "";
+            const data = await SA.apiGet("/api/lesson/" + scheduleId + "/homework");
+            const les = data.lesson;
+            const entries = data.entries || [];
+            const kind =
+              les.kind && String(les.kind).trim()
+                ? " (" + String(les.kind).trim() + ")"
+                : "";
+            modalTitle.textContent = (les.subject || "Пара") + kind;
+            const contMeta =
+              les.contingent && String(les.contingent).trim()
+                ? "🎓 " + String(les.contingent).trim()
+                : "";
+            modalMeta.textContent = [
+              les.date,
+              les.start + "–" + les.end,
+              [les.teacher, les.room].filter(Boolean).join(" · "),
+              contMeta,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+
+            let entriesHtml = "";
+            if (!entries.length) {
+              entriesHtml =
+                '<p class="muted" style="margin:0">Староста пока не прикрепил ДЗ и файлы к этой паре.</p>';
+            } else {
+              entriesHtml = entries
+                .map((e, i) => {
+                  const desc =
+                    '<p class="hw-desc">' +
+                    (e.description
+                      ? escapeHtml(e.description).replace(/\n/g, "<br/>")
+                      : '<span class="muted">(без текста)</span>') +
+                    "</p>";
+                  const files = (e.files || [])
+                    .map(
+                      (fp, j) =>
+                        '<button type="button" class="secondary hw-file-btn" data-path="' +
+                        escapeHtml(fp) +
+                        '" data-name="' +
+                        escapeHtml(baseName(fp)) +
+                        '">Скачать: ' +
+                        escapeHtml(baseName(fp)) +
+                        "</button>"
+                    )
+                    .join("");
+                  const delRow =
+                    meIsElder && e.id
+                      ? '<p style="margin:8px 0 0"><button type="button" class="secondary hw-del-hw" data-hw-id="' +
+                        e.id +
+                        '">Удалить это ДЗ</button></p>'
+                      : "";
+                  return (
+                    '<div class="hw-entry">' +
+                    (entries.length > 1
+                      ? '<div class="muted hw-entry-num">Запись ' + (i + 1) + "</div>"
+                      : "") +
+                    desc +
+                    files +
+                    delRow +
+                    "</div>"
+                  );
+                })
+                .join("");
+            }
+
+            let elderHtml = "";
+            if (meIsElder) {
+              elderHtml =
+                '<div class="modal-elder-hw">' +
+                '<h3 class="modal-elder-hw-title">Прикрепить к этой паре</h3>' +
+                '<p class="muted" style="margin:0 0 10px;font-size:0.82rem">Текст и файлы появятся здесь и в разделе «Дедлайны». Один файл — до 20 МБ.</p>' +
+                '<label for="modalElderHwDesc">Текст ДЗ</label>' +
+                '<textarea id="modalElderHwDesc" rows="4" placeholder="Условие, ссылка…"></textarea>' +
+                '<label for="modalElderHwFiles">Файлы (по желанию)</label>' +
+                '<input type="file" id="modalElderHwFiles" multiple />' +
+                '<p id="modalElderHwSt" class="muted" style="margin:4px 0 0"></p>' +
+                '<button type="button" id="modalElderHwSave">Сохранить</button>' +
+                '<p id="modalElderHwMsg" class="muted" style="margin:8px 0 0"></p>' +
+                "</div>";
+            }
+
+            modalBody.innerHTML = entriesHtml + elderHtml;
+            wireHwFileButtons(modalBody);
+            modalBody.querySelectorAll(".hw-del-hw").forEach((b) => {
+              b.addEventListener("click", async () => {
+                const hid = b.getAttribute("data-hw-id");
+                if (
+                  !hid ||
+                  !confirm(
+                    "Удалить это прикреплённое ДЗ? Связанный дедлайн к паре тоже исчезнет."
+                  )
+                ) {
+                  return;
+                }
+                try {
+                  await SA.apiDelete("/api/homework/" + hid);
+                  const keepDay = selectedDay;
+                  await loadWeek(weekMondayISO, keepDay);
+                  await openLessonModal(scheduleId);
+                } catch (err) {
+                  alert(String(err));
+                }
+              });
+            });
+
+            if (meIsElder) {
+              const saveBtn = document.getElementById("modalElderHwSave");
+              if (saveBtn) {
+                saveBtn.onclick = async () => {
+                  const msgEl = document.getElementById("modalElderHwMsg");
+                  const stEl = document.getElementById("modalElderHwSt");
+                  msgEl.textContent = "";
+                  stEl.textContent = "";
+                  const descEl = document.getElementById("modalElderHwDesc");
+                  const finp = document.getElementById("modalElderHwFiles");
+                  const desc = descEl ? descEl.value.trim() : "";
+                  const files = finp && finp.files ? Array.from(finp.files) : [];
+                  const paths = [];
+                  try {
+                    for (let i = 0; i < files.length; i++) {
+                      stEl.textContent =
+                        "Загрузка файла " + (i + 1) + " / " + files.length + "…";
+                      const res = await SA.apiUploadFile(
+                        "/api/homework/upload",
+                        files[i]
+                      );
+                      if (res.path) paths.push(res.path);
+                    }
+                    stEl.textContent = "Сохраняю…";
+                    await SA.apiPost("/api/homework", {
+                      schedule_id: scheduleId,
+                      description: desc,
+                      file_paths: paths,
+                    });
+                    msgEl.textContent = "Сохранено.";
+                    if (descEl) descEl.value = "";
+                    if (finp) finp.value = "";
+                    stEl.textContent = "";
+                    const keepDay = selectedDay;
+                    await loadWeek(weekMondayISO, keepDay);
+                    await openLessonModal(scheduleId);
+                  } catch (e) {
+                    msgEl.textContent = String(e);
+                    stEl.textContent = "";
+                  }
+                };
+              }
+            }
+
+            modal.hidden = false;
+          } catch (e) {
+            errEl.textContent = String(e);
+          }
+        }
+
+        function closeLessonModal() {
+          modal.hidden = true;
+        }
+
+        document.getElementById("lessonModalClose").addEventListener("click", closeLessonModal);
+        document.getElementById("lessonModalBackdrop").addEventListener("click", closeLessonModal);
+
+        document.getElementById("weekPrev").addEventListener("click", async () => {
+          const mon = parseISODateOnly(weekMondayISO);
+          if (!mon) return;
+          const prev = fmtISO(addDays(mon, -7));
+          try {
+            errEl.textContent = "";
+            await loadWeek(prev);
+          } catch (e) {
+            errEl.textContent = String(e);
+          }
+        });
+
+        document.getElementById("weekNext").addEventListener("click", async () => {
+          const mon = parseISODateOnly(weekMondayISO);
+          if (!mon) return;
+          const nxt = fmtISO(addDays(mon, 7));
+          try {
+            errEl.textContent = "";
+            await loadWeek(nxt);
+          } catch (e) {
+            errEl.textContent = String(e);
+          }
+        });
+
+        try {
+          const [me, weekData] = await Promise.all([
+            SA.apiGet("/api/me"),
+            SA.apiGet("/api/schedule/week_window"),
+          ]);
+          document.getElementById("userLine").textContent =
+            me.full_name + " · " + (me.group_name || "без группы");
+          meIsElder = !!me.is_elder;
+          if (!me.study_group_id) {
+            banner.innerHTML = SA.needGroupBanner;
+          }
+          if (weekData.need_group || !me.study_group_id) {
+            if (!banner.innerHTML) banner.innerHTML = SA.needGroupBanner;
+            panel.hidden = true;
+            return;
+          }
+          panel.hidden = false;
+          setWeekFromResponse(weekData);
+        } catch (e) {
+          errEl.textContent = String(e);
+        }
+      })();
+    </script>
+  </body>
+</html>

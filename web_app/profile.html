@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Мои баллы</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      .profile-user-card {
+        padding: 16px 18px;
+        background: linear-gradient(
+          125deg,
+          rgba(91, 140, 255, 0.14) 0%,
+          rgba(26, 35, 50, 0.92) 48%
+        );
+        border: 1px solid rgba(91, 140, 255, 0.18);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+      }
+      .profile-user-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .profile-user-name {
+        font-weight: 700;
+        font-size: 1.08rem;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+        color: var(--text);
+      }
+      .profile-user-meta {
+        font-size: 0.86rem;
+        line-height: 1.4;
+        color: var(--muted);
+      }
+
+      .profile-sem-row {
+        margin-bottom: 4px;
+      }
+      .profile-sem-row label {
+        display: block;
+        margin: 0 0 4px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .profile-sem-row select {
+        margin: 0 0 0;
+      }
+
+      .profile-table-wrap {
+        margin-top: 6px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        overflow-x: auto;
+        overflow-y: hidden;
+        background: rgba(15, 20, 25, 0.35);
+        -webkit-overflow-scrolling: touch;
+      }
+      .profile-grades-table,
+      .profile-site-table {
+        margin: 0;
+        font-size: 0.88rem;
+      }
+      .profile-grades-table thead th,
+      .profile-site-table thead th {
+        background: rgba(91, 140, 255, 0.11);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        font-weight: 600;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 11px 10px;
+        white-space: nowrap;
+      }
+      .profile-grades-table td,
+      .profile-site-table td {
+        padding: 11px 10px;
+        vertical-align: top;
+      }
+      .profile-grades-table tbody tr,
+      .profile-site-table tbody tr {
+        transition: background 0.12s ease;
+      }
+      @media (hover: hover) {
+        .profile-grades-table tbody tr:hover,
+        .profile-site-table tbody tr:hover {
+          background: rgba(91, 140, 255, 0.07);
+        }
+      }
+      .profile-grades-table tbody tr:last-child td,
+      .profile-site-table tbody tr:last-child td {
+        border-bottom-color: transparent;
+      }
+      .profile-grades-table tfoot td {
+        border-top: 1px solid rgba(91, 140, 255, 0.22);
+        padding-top: 12px;
+        background: rgba(91, 140, 255, 0.05);
+      }
+
+      .profile-elder .block-title {
+        margin-bottom: 4px;
+      }
+      .profile-elder label {
+        display: block;
+        margin: 14px 0 4px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .profile-elder label:first-of-type {
+        margin-top: 4px;
+      }
+      .profile-elder select,
+      .profile-elder input {
+        margin: 0 0 0;
+      }
+      .profile-elder #saveG {
+        margin-top: 18px;
+        width: 100%;
+      }
+      .profile-elder #gmsg {
+        margin-top: 10px;
+        min-height: 1.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Мои баллы</h1>
+      <p class="app-page-lead muted">
+        Ведомость группы и данные с org.fa.ru после синхронизации старостой.
+      </p>
+    </header>
+    <div id="banner"></div>
+    <div id="info" class="card profile-user-card">…</div>
+    <div class="card">
+      <h2 class="block-title">Ведомость (староста)</h2>
+      <p class="block-desc muted">
+        Баллы, которые староста вносит вручную в этом мини-приложении.
+      </p>
+      <div class="profile-sem-row">
+        <label for="viewSem">Семестр</label>
+        <select id="viewSem"></select>
+      </div>
+      <div class="profile-table-wrap">
+        <table class="profile-grades-table">
+          <thead>
+            <tr>
+              <th>Сем.</th>
+              <th>Предмет</th>
+              <th>Баллы</th>
+              <th>Посещ. (бот)</th>
+            </tr>
+          </thead>
+          <tbody id="gradesBody"></tbody>
+          <tfoot id="gradesFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+    <div id="siteGradesCard" class="card" style="display: none">
+      <h2 class="block-title">Сайт org.fa.ru</h2>
+      <p class="block-desc muted">
+        Данные после синхронизации старостой (<code>/sync_site_grades</code> в боте).
+      </p>
+      <div class="profile-table-wrap">
+        <table class="profile-site-table">
+          <thead>
+            <tr>
+              <th>Дисциплина</th>
+              <th>Балл</th>
+              <th>Посещ.% (сайт)</th>
+              <th>Оценки</th>
+            </tr>
+          </thead>
+          <tbody id="siteGradesBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="elderPanel" class="card profile-elder" style="display: none">
+      <h2 class="block-title">Староста: выставить баллы</h2>
+      <label>Студент</label>
+      <select id="studentSel"></select>
+      <label>Семестр</label>
+      <select id="semSel"></select>
+      <label>Предмет</label>
+      <select id="subj"></select>
+      <label>Баллы</label>
+      <input id="pts" type="text" inputmode="decimal" />
+      <button type="button" id="saveG">Сохранить</button>
+      <p id="gmsg" class="muted"></p>
+    </div>
+    <p id="err" class="err"></p>
+    <script src="api.js"></script>
+    <script src="nav.js"></script>
+    <script>
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
+            c
+          ])
+        );
+      }
+
+      (async () => {
+        try {
+          const me = await SA.apiGet("/api/me");
+          if (!me.study_group_id) {
+            document.getElementById("banner").innerHTML = SA.needGroupBanner;
+          }
+          const gname = me.group_name || "группа не выбрана";
+          const roleRu =
+            me.role === "elder"
+              ? "староста"
+              : me.role === "deputy_elder"
+                ? "зам. старосты"
+                : "студент";
+          document.getElementById("info").innerHTML =
+            '<div class="profile-user-inner">' +
+            '<span class="profile-user-name">' +
+            escapeHtml(me.full_name || "—") +
+            "</span>" +
+            '<span class="profile-user-meta">' +
+            escapeHtml(gname) +
+            " · " +
+            escapeHtml(roleRu) +
+            "</span></div>";
+
+          function formatAttCell(r) {
+            const p = r.attendance_present;
+            const t = r.attendance_total;
+            const pts = r.attendance_points;
+            if (pts == null || t === 0) {
+              return `<td class="muted" title="Нет прошедших пар в расписании">—</td>`;
+            }
+            const title = `Отмечено ${p} из ${t} пар`;
+            return `<td title="${escapeHtml(title)}">${escapeHtml(
+              String(pts)
+            )}</td>`;
+          }
+
+          function fillGradesTableRows(items, attendanceOverall) {
+            const tb = document.getElementById("gradesBody");
+            const foot = document.getElementById("gradesFoot");
+            tb.innerHTML =
+              items && items.length
+                ? items
+                    .map(
+                      (r) =>
+                        `<tr><td>${escapeHtml(
+                          String(r.semester_number)
+                        )}</td><td>${escapeHtml(
+                          r.subject
+                        )}</td><td><strong>${escapeHtml(
+                          String(r.points)
+                        )}</strong></td>${formatAttCell(r)}</tr>`
+                    )
+                    .join("")
+                : '<tr><td colspan="4" class="muted">Нет данных</td></tr>';
+            if (foot) {
+              const o = attendanceOverall;
+              if (
+                o &&
+                o.total > 0 &&
+                o.points != null
+              ) {
+                foot.innerHTML =
+                  "<tr><td colspan=\"3\"><strong>Итого посещ. (бот)</strong></td><td><strong>" +
+                  escapeHtml(String(o.points)) +
+                  '</strong> <span class="muted">(' +
+                  escapeHtml(String(o.present)) +
+                  "/" +
+                  escapeHtml(String(o.total)) +
+                  ")</span></td></tr>";
+              } else {
+                foot.innerHTML = "";
+              }
+            }
+          }
+
+          function renderSiteGradesPayload(sg) {
+            const card = document.getElementById("siteGradesCard");
+            const tb = document.getElementById("siteGradesBody");
+            if (!me.study_group_id) {
+              card.style.display = "none";
+              return;
+            }
+            if (sg.need_group) {
+              card.style.display = "none";
+              return;
+            }
+            card.style.display = "block";
+            if (!sg.items.length) {
+              tb.innerHTML =
+                '<tr><td colspan="4" class="muted">Пока не загружено с сайта</td></tr>';
+              return;
+            }
+            tb.innerHTML = sg.items
+              .map((r) => {
+                const tot =
+                  r.total_score != null && r.total_score !== ""
+                    ? escapeHtml(String(r.total_score))
+                    : "—";
+                const att =
+                  r.attendance_percent != null && r.attendance_percent !== ""
+                    ? escapeHtml(String(r.attendance_percent)) + "%"
+                    : "—";
+                const marks = r.marks_display
+                  ? escapeHtml(r.marks_display)
+                  : "—";
+                return (
+                  "<tr><td>" +
+                  escapeHtml(r.discipline || "") +
+                  "</td><td>" +
+                  tot +
+                  "</td><td>" +
+                  att +
+                  "</td><td>" +
+                  marks +
+                  "</td></tr>"
+                );
+              })
+              .join("");
+          }
+
+          async function loadGrades() {
+            const vs = document.getElementById("viewSem");
+            const sem = vs && vs.value ? `?semester=${encodeURIComponent(vs.value)}` : "";
+            const g = await SA.apiGet("/api/grades" + sem);
+            fillGradesTableRows(g.items, g.attendance_overall);
+          }
+
+          let semsCache = null;
+          if (me.study_group_id) {
+            const [sems, sg, g0] = await Promise.all([
+              SA.apiGet("/api/semesters"),
+              SA.apiGet("/api/site_grades"),
+              SA.apiGet("/api/grades"),
+            ]);
+            semsCache = sems;
+            const viewOpts =
+              '<option value="">Все семестры</option>' +
+              sems.items
+                .map(
+                  (n) =>
+                    `<option value="${n}">Семестр ${n}</option>`
+                )
+                .join("");
+            document.getElementById("viewSem").innerHTML = viewOpts;
+            document.getElementById("viewSem").onchange = loadGrades;
+            fillGradesTableRows(g0.items, g0.attendance_overall);
+            renderSiteGradesPayload(sg);
+          }
+
+          if (me.is_elder && me.study_group_id) {
+            document.getElementById("elderPanel").style.display = "block";
+            const st = await SA.apiGet("/api/students");
+            const sel = document.getElementById("studentSel");
+            sel.innerHTML = st.items
+              .map(
+                (s) =>
+                  `<option value="${s.telegram_id}">${escapeHtml(
+                    s.full_name
+                  )}</option>`
+              )
+              .join("");
+            const sems = semsCache;
+            const semEl = document.getElementById("semSel");
+            const cur = sems.current_semester;
+            semEl.innerHTML = sems.items.length
+              ? sems.items
+                  .map(
+                    (n) =>
+                      `<option value="${n}"${n === cur ? " selected" : ""}>Семестр ${n}</option>`
+                  )
+                  .join("")
+              : '<option value="">Нет семестров</option>';
+            async function loadSubjectsElder() {
+              const sn = semEl.value.trim();
+              const subjEl = document.getElementById("subj");
+              if (!sn) {
+                subjEl.innerHTML =
+                  '<option value="">Сначала появятся семестры после /update_schedule</option>';
+                return;
+              }
+              const subs = await SA.apiGet(
+                "/api/schedule/subjects?semester=" + encodeURIComponent(sn)
+              );
+              subjEl.innerHTML = subs.items.length
+                ? subs.items
+                    .map(
+                      (name) =>
+                        `<option value="${escapeHtml(name)}">${escapeHtml(
+                          name
+                        )}</option>`
+                    )
+                    .join("")
+                : '<option value="">Нет предметов в этом семестре</option>';
+            }
+            semEl.onchange = loadSubjectsElder;
+            await loadSubjectsElder();
+            document.getElementById("saveG").onclick = async () => {
+              const msg = document.getElementById("gmsg");
+              msg.textContent = "";
+              const subjVal = document.getElementById("subj").value.trim();
+              const semNum = parseInt(
+                document.getElementById("semSel").value,
+                10
+              );
+              if (!semNum) {
+                msg.textContent = "Выберите семестр.";
+                return;
+              }
+              if (!subjVal) {
+                msg.textContent = "Выберите предмет.";
+                return;
+              }
+              try {
+                await SA.apiPost("/api/grades", {
+                  target_telegram_id: parseInt(
+                    document.getElementById("studentSel").value,
+                    10
+                  ),
+                  semester_number: semNum,
+                  subject: subjVal,
+                  points: parseFloat(
+                    document.getElementById("pts").value.replace(",", ".")
+                  ),
+                });
+                msg.textContent = "Сохранено";
+                await loadGrades();
+              } catch (e) {
+                msg.textContent = String(e);
+              }
+            };
+          }
+        } catch (e) {
+          document.getElementById("err").textContent = String(e);
+        }
+      })();
+    </script>
+  </body>
+</html>

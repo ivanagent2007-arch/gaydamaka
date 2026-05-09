@@ -1,0 +1,100 @@
+Развёртывание бота на VPS Timeweb (Ubuntu)
+==========================================
+
+Что нужно заранее
+-----------------
+- VPS с Ubuntu 22.04/24.04 (или Debian 12) в панели Timeweb.
+- Домен, привязанный к серверу (A-запись на IP VPS). Для мини-приложения Telegram нужен HTTPS.
+- Локально: скопируйте папку проекта и файл data/bot.db (и data/uploads при необходимости), либо залейте через git/scp.
+
+1) Подключение по SSH
+---------------------
+ssh root@ВАШ_IP
+# или пользователь из панели Timeweb
+
+2) Системные пакеты
+-------------------
+apt update && apt install -y python3 python3-venv python3-pip git nginx certbot python3-certbot-nginx ufw
+
+3) Пользователь и каталог (не под root)
+---------------------------------------
+adduser --disabled-password botuser
+mkdir -p /home/botuser/student_assistant_bot
+chown botuser:botuser /home/botuser/student_assistant_bot
+
+Загрузите проект в /home/botuser/student_assistant_bot (scp, rsync, git clone).
+
+4) Виртуальное окружение и зависимости
+--------------------------------------
+su - botuser
+cd ~/student_assistant_bot
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+5) Файл .env на сервере
+-----------------------
+cp .env.example .env
+nano .env
+
+Обязательно:
+  BOT_TOKEN=...          # от @BotFather
+  WEBAPP_PUBLIC_URL=https://ваш-домен.ru   # БЕЗ слэша в конце, с https://
+  WEBAPP_HOST=127.0.0.1  # слушать только localhost — наружу отдаст nginx
+  WEBAPP_PORT=8080
+
+Остальное скопируйте с локальной машины (ELSTAROST_*, GROUP_NAME, почта IMAP и т.д.).
+
+Путь к БД по умолчанию: data/bot.db — положите свой bot.db в ~/student_assistant_bot/data/
+
+6) Firewall
+-----------
+ufw allow OpenSSH
+ufw allow 'Nginx Full'
+ufw enable
+
+7) Nginx + HTTPS (Let's Encrypt)
+----------------------------------
+Скопируйте пример сайта:
+  sudo cp deploy/timeweb/nginx-bot.conf.example /etc/nginx/sites-available/bot
+Отредактируйте server_name на ваш домен.
+  sudo ln -sf /etc/nginx/sites-available/bot /etc/nginx/sites-enabled/
+  sudo nginx -t && sudo systemctl reload nginx
+
+Сертификат:
+  sudo certbot --nginx -d ваш-домен.ru
+
+После выпуска сертификата в .env:
+  WEBAPP_PUBLIC_URL=https://ваш-домен.ru
+
+8) systemd (автозапуск)
+-----------------------
+  sudo cp deploy/timeweb/student-assistant-bot.service /etc/systemd/system/
+  sudo systemctl daemon-reload
+  sudo systemctl enable student-assistant-bot
+  sudo systemctl start student-assistant-bot
+  sudo systemctl status student-assistant-bot
+
+Логи:
+  journalctl -u student-assistant-bot -f
+
+9) Проверка
+-----------
+- curl -sI https://ваш-домен.ru/index.html  — ответ 200 или редирект на index.
+- В Telegram: кнопка «Мини-приложение» должна открывать сайт.
+- Если бот не отвечает: journalctl и проверка BOT_TOKEN.
+
+10) Перенос данных с Windows
+----------------------------
+Скопируйте на сервер:
+  student_assistant_bot/data/bot.db
+  student_assistant_bot/data/uploads/   (если есть вложения)
+Права:
+  sudo chown -R botuser:botuser /home/botuser/student_assistant_bot/data
+
+Примечания
+----------
+- Бот использует long polling — входящий 443 на Telegram не нужен, достаточно исходящего интернета.
+- MemoryStorage FSM: при перезапуске бота состояния диалогов сбрасываются (как и локально).
+- Если на Timeweb уже есть «конструктор сайта» на том же домене — используйте поддомен (bot.ваш-домен.ru) и укажите его в WEBAPP_PUBLIC_URL и в nginx server_name.

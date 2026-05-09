@@ -1,0 +1,9 @@
+# Положить в КОРЕНЬ сайта BOTGADAMAKA (домен botgadamaka.cv324192.tw1.ru).
+# Всё проксируется на процесс бота (aiohttp). Порт = WEBAPP_PORT в .env бота.
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteCond %{REQUEST_URI} !^/\.well-known/
+RewriteRule ^(.*)$ http://127.0.0.1:8080/$1 [P,L]
+</IfModule>
