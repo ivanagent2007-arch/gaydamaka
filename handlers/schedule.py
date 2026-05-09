@@ -30,17 +30,41 @@ def _esc(s: str) -> str:
 _LESSON_SEP = "────────────────────────"
 
 
-def _lesson_slot_indices(rows: list[Schedule]) -> list[int]:
-    """Один номер слота на одно время начала (параллельные пары — тот же номер)."""
+def _parse_start_minutes(st: str | None) -> int:
+    raw = (st or "").strip().split(":")[:3]
+    if len(raw) >= 2:
+        try:
+            return int(raw[0]) * 60 + int(raw[1])
+        except ValueError:
+            pass
+    return 10**9
+
+
+def _slot_order_map_from_week(week_rows: list[Schedule]) -> dict[str, int]:
+    """Уникальные времена начала за неделю, по порядку времени — официальный индекс пары для UI."""
+    starts = sorted(
+        {(s.start_time or "").strip() for s in week_rows if (s.start_time or "").strip()},
+        key=lambda t: (_parse_start_minutes(t), t),
+    )
+    return {st: i + 1 for i, st in enumerate(starts)}
+
+
+def _lesson_slot_indices(day_rows: list[Schedule], week_rows: list[Schedule]) -> list[int]:
+    """Один номер слота на одно время начала; номер считается по месту времени среди всей загруженной недели."""
+    order = _slot_order_map_from_week(week_rows)
     nums: list[int] = []
-    slot = 0
-    prev_start: str | None = None
-    for s in rows:
+    fb_slot = len(order)
+    fb_prev: str | None = None
+    for s in day_rows:
         st = (s.start_time or "").strip()
-        if st != prev_start:
-            slot += 1
-            prev_start = st
-        nums.append(slot)
+        if st and st in order:
+            nums.append(order[st])
+            fb_prev = None
+            continue
+        if st != fb_prev:
+            fb_slot += 1
+            fb_prev = st
+        nums.append(fb_slot)
     return nums
 
 
@@ -184,6 +208,23 @@ async def _lessons_for_day(
     return list(q)
 
 
+async def _lessons_for_week_of(
+    session, study_group_id: int, any_day: date
+) -> list[Schedule]:
+    week_start = any_day - timedelta(days=any_day.weekday())
+    week_end = week_start + timedelta(days=6)
+    q = await session.scalars(
+        select(Schedule)
+        .where(
+            Schedule.study_group_id == study_group_id,
+            Schedule.lesson_date >= week_start,
+            Schedule.lesson_date <= week_end,
+        )
+        .order_by(Schedule.lesson_date, Schedule.start_time)
+    )
+    return list(q)
+
+
 async def send_schedule_day(
     message: Message,
     session,
@@ -243,7 +284,8 @@ async def send_schedule_day(
         return
 
     hdr = _fmt_day_header(sg.name, day, title_ru)
-    slot_nums = _lesson_slot_indices(rows)
+    week_rows = await _lessons_for_week_of(session, db_user.study_group_id, day)
+    slot_nums = _lesson_slot_indices(rows, week_rows)
     body = _format_lesson_rows(rows, slot_nums)
     await message.answer(f"{hdr}\n\n{body}", parse_mode="HTML")
 
@@ -326,7 +368,7 @@ async def send_schedule_week(message: Message, session, db_user: User | None) ->
         ds = d.strftime("%d.%m.%Y")
         parts.append(f"\n<b>{wd} {ds}</b>")
         day_rows = by_day[d]
-        slot_nums = _lesson_slot_indices(day_rows)
+        slot_nums = _lesson_slot_indices(day_rows, rows)
         parts.append("\n" + _format_lesson_rows(day_rows, slot_nums))
     text = "\n".join(parts)
     await message.answer(text, parse_mode="HTML")

@@ -132,20 +132,31 @@
         );
       }
 
-      /** Как в боте: один номер слота на одно время начала (параллельные пары — один номер). */
-      function lessonSlotIndices(rows) {
-        const nums = [];
-        let slot = 0;
-        let prevStart = null;
-        for (const s of rows) {
-          const st = String(s.start || "").trim();
-          if (st !== prevStart) {
-            slot += 1;
-            prevStart = st;
-          }
-          nums.push(slot);
+      function parseStartToMinutes(t) {
+        const m = String(t || "").trim().match(/^(\d{1,2}):(\d{2})/);
+        if (!m) return Number.POSITIVE_INFINITY;
+        return +m[1] * 60 + +m[2];
+      }
+
+      /** Номер слота по времени начала в контексте недели: объединение всех времён в items, порядок по часам. Параллельные пары — одно время — один номер. */
+      function buildStartTimeToSlotMap(items) {
+        const seen = new Set();
+        const starts = [];
+        for (const l of items) {
+          const st = String(l.start || "").trim();
+          if (!st || seen.has(st)) continue;
+          seen.add(st);
+          starts.push(st);
         }
-        return nums;
+        starts.sort((a, b) => {
+          const da = parseStartToMinutes(a);
+          const db = parseStartToMinutes(b);
+          if (da !== db) return da - db;
+          return a.localeCompare(b);
+        });
+        const map = new Map();
+        starts.forEach((st, i) => map.set(st, i + 1));
+        return map;
       }
 
       /** Как _lesson_visual_merge_key в handlers/schedule.py: предмет + тип + время начала. */
@@ -249,8 +260,14 @@
           const list = itemsAll
             .filter((l) => l.date === selectedDay)
             .slice()
-            .sort((a, b) => String(a.start).localeCompare(String(b.start)));
+            .sort((a, b) => {
+              const da = parseStartToMinutes(a.start);
+              const db = parseStartToMinutes(b.start);
+              if (da !== db) return da - db;
+              return String(a.start).localeCompare(String(b.start));
+            });
           if (!list.length) {
+            lessonsList.innerHTML = "";
             lessonsList.hidden = true;
             lessonsPlaceholder.hidden = false;
             lessonsPlaceholder.textContent = "На этот день пар нет.";
@@ -258,13 +275,17 @@
           }
           lessonsPlaceholder.hidden = true;
           lessonsList.hidden = false;
-          const slotNums = lessonSlotIndices(list);
+          const slotByStart = buildStartTimeToSlotMap(itemsAll);
           let prevKey = null;
           const parts = list.map((l, i) => {
             const key = lessonMergeKeySch(l);
             const isCont = prevKey !== null && key === prevKey;
             prevKey = key;
-            const num = slotNums[i];
+            const stKey = String(l.start || "").trim();
+            let num = slotByStart.get(stKey);
+            if (num == null) {
+              num = i + 1;
+            }
             const kind =
               l.kind && String(l.kind).trim()
                 ? ' <span class="muted">(' + escapeHtml(String(l.kind).trim()) + ")</span>"

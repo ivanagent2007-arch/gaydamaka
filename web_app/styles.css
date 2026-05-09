@@ -627,6 +627,11 @@ button.secondary {
   gap: 8px;
 }
 
+/* Иначе display:flex перебивает атрибут [hidden], и список остаётся видимым. */
+.lessons-list[hidden] {
+  display: none !important;
+}
+
 .lesson-row {
   position: relative;
   width: 100%;
