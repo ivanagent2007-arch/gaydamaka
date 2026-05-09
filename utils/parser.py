@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -305,12 +306,45 @@ def fetch_schedule_json(
         f"{ruz}/api/schedule/group/{group_id}"
         f"?start={start_s}&finish={finish_s}&lng=1"
     )
-    r = requests.get(url, timeout=60)
+    r = requests.get(url, timeout=75)
     r.raise_for_status()
     data = r.json()
     if not isinstance(data, list):
         return []
     return data
+
+
+def fetch_schedule_json_span(
+    group_id: str,
+    date_begin: date,
+    date_end: date,
+    base_url: str | None = None,
+) -> list[dict[str, Any]]:
+    """Сливает несколько запросов к РУЗ, если интервал шире RUZ_API_CHUNK_DAYS."""
+    if date_begin > date_end:
+        date_begin, date_end = date_end, date_begin
+    span_days = (date_end - date_begin).days + 1
+    chunk = max(14, int(config.RUZ_API_CHUNK_DAYS))
+    if span_days <= chunk:
+        return fetch_schedule_json(group_id, date_begin, date_end, base_url=base_url)
+    spans: list[tuple[date, date]] = []
+    cur = date_begin
+    while cur <= date_end:
+        chunk_end = min(cur + timedelta(days=chunk - 1), date_end)
+        spans.append((cur, chunk_end))
+        cur = chunk_end + timedelta(days=1)
+    merged: list[dict[str, Any]] = []
+    workers = max(1, min(5, len(spans)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = {
+            pool.submit(
+                fetch_schedule_json, group_id, a, b, base_url
+            ): (a, b)
+            for a, b in spans
+        }
+        for fut in as_completed(futs):
+            merged.extend(fut.result())
+    return merged
 
 
 def build_schedule_rows(group_name: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -356,7 +390,7 @@ def fetch_schedule_for_group(
     today = date.today()
     db = date_begin if date_begin is not None else today - timedelta(days=config.RUZ_SCHEDULE_PAST_DAYS)
     de = date_end if date_end is not None else today + timedelta(days=config.RUZ_SCHEDULE_FUTURE_DAYS)
-    items = fetch_schedule_json(gid, db, de, base_url=base_url)
+    items = fetch_schedule_json_span(gid, db, de, base_url=base_url)
     return build_schedule_rows(group_name, items)
 
 

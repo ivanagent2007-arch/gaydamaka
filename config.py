@@ -30,6 +30,10 @@ _RUZ_FUTURE = int(os.getenv("RUZ_SCHEDULE_FUTURE_DAYS", "400").strip() or "400")
 RUZ_SCHEDULE_PAST_DAYS = max(0, min(_RUZ_PAST, 730))
 RUZ_SCHEDULE_FUTURE_DAYS = max(0, min(_RUZ_FUTURE, 730))
 
+# Одна порция запроса к JSON API РУЗ (месяцев ~2); иначе длинный интервал даёт ошибку или таймаут.
+_RUZ_CHUNK = int(os.getenv("RUZ_API_CHUNK_DAYS", "56").strip() or "56")
+RUZ_API_CHUNK_DAYS = max(14, min(_RUZ_CHUNK, 120))
+
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "0.0.0.0")
 WEBAPP_PORT = int(os.getenv("WEBAPP_PORT", "8080"))
 

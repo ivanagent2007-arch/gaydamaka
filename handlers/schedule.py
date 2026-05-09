@@ -143,13 +143,17 @@ def _fmt_day_header(sg_name: str, day: date, title: str) -> str:
     return f"<b>{_esc(sg_name)}</b>\n{title}: {wd}, {ds}"
 
 
-async def sync_study_group_schedule(session, sg: StudyGroup) -> int:
-    """Подтягивает расписание с РУЗ (широкий диапазон дат) и перезаписывает кэш группы в этом окне."""
+async def sync_study_group_schedule_for_range(
+    session,
+    sg: StudyGroup,
+    rng_lo: date,
+    rng_hi: date,
+) -> int:
+    """Загружает с РУЗ занятия за [rng_lo, rng_hi] и заменяет кэш группы только на этом интервале."""
+    if rng_lo > rng_hi:
+        rng_lo, rng_hi = rng_hi, rng_lo
     ruz_q = ruz_search_for_group(sg)
     ruz_url = ruz_base_url_for_group(sg)
-    today = date.today()
-    rng_lo = today - timedelta(days=config.RUZ_SCHEDULE_PAST_DAYS)
-    rng_hi = today + timedelta(days=config.RUZ_SCHEDULE_FUTURE_DAYS)
     rows = await fetch_schedule_async(
         sg.name,
         ruz_q,
@@ -158,7 +162,9 @@ async def sync_study_group_schedule(session, sg: StudyGroup) -> int:
         date_end=rng_hi,
     )
     if not rows:
-        rows = fetch_schedule_html_fallback(sg.name, base_url=ruz_url)
+        today = date.today()
+        if rng_lo <= today <= rng_hi:
+            rows = fetch_schedule_html_fallback(sg.name, base_url=ruz_url)
     if not rows:
         return 0
 
@@ -204,6 +210,14 @@ async def sync_study_group_schedule(session, sg: StudyGroup) -> int:
     return len(deduped)
 
 
+async def sync_study_group_schedule(session, sg: StudyGroup) -> int:
+    """Полная подгрузка по настройкам RUZ_SCHEDULE_* (староста /update_schedule и т.п.)."""
+    today = date.today()
+    rng_lo = today - timedelta(days=config.RUZ_SCHEDULE_PAST_DAYS)
+    rng_hi = today + timedelta(days=config.RUZ_SCHEDULE_FUTURE_DAYS)
+    return await sync_study_group_schedule_for_range(session, sg, rng_lo, rng_hi)
+
+
 async def schedule_lesson_date_bounds(
     session, study_group_id: int
 ) -> tuple[date | None, date | None]:
@@ -227,9 +241,18 @@ async def schedule_cache_needs_expansion(
 async def ensure_schedule_cache_covers_range(
     session, sg: StudyGroup, range_start: date, range_end: date
 ) -> bool:
+    """Догружает с РУЗ только окрестность запроса (быстро для Web App и бота при листании)."""
     if not await schedule_cache_needs_expansion(session, sg.id, range_start, range_end):
         return False
-    n = await sync_study_group_schedule(session, sg)
+    pad = timedelta(days=21)
+    today = date.today()
+    abs_lo = today - timedelta(days=config.RUZ_SCHEDULE_PAST_DAYS)
+    abs_hi = today + timedelta(days=config.RUZ_SCHEDULE_FUTURE_DAYS)
+    lo = max(abs_lo, range_start - pad)
+    hi = min(abs_hi, range_end + pad)
+    if lo > hi:
+        return False
+    n = await sync_study_group_schedule_for_range(session, sg, lo, hi)
     return n > 0
 
 
