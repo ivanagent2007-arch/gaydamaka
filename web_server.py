@@ -1229,9 +1229,11 @@ async def _static_cache_middleware(request: web.Request, handler):
         return resp
     path = request.path.lower()
     if path.endswith(".js") or path.endswith(".css"):
-        resp.headers.setdefault("Cache-Control", "public, max-age=86400")
+        # Короткий cache + must-revalidate: при правках стилей пользователь увидит
+        # их в течение 5 минут (раньше было 24 часа — обновления подвисали).
+        resp.headers.setdefault("Cache-Control", "public, max-age=300, must-revalidate")
     elif path.endswith(".html") or path in ("/", ""):
-        resp.headers.setdefault("Cache-Control", "private, max-age=120")
+        resp.headers.setdefault("Cache-Control", "private, max-age=60, must-revalidate")
     return resp
 
 
