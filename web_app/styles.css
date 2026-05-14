@@ -689,51 +689,84 @@ body a:active {
   line-height: 1.45;
 }
 
-.lesson-modal-body .hw-entry {
-  margin-bottom: 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
+/* Заголовок раздела внутри модалки («Прикреплённое ДЗ») */
+.modal-section-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 12px 0 10px;
 }
 
-.lesson-modal-body .hw-entry:last-child {
-  border-bottom: none;
+/* Каждая запись ДЗ = отдельная мини-карточка с зелёной полоской */
+.lesson-modal-body .hw-entry {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand-green);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.lesson-modal-body .hw-entry:last-of-type {
   margin-bottom: 0;
-  padding-bottom: 0;
 }
 
 .lesson-modal-body .hw-desc {
-  margin: 0 0 8px;
-  font-size: 0.92rem;
-  line-height: 1.45;
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  line-height: 1.5;
   white-space: pre-wrap;
+  color: var(--text);
 }
 
 .lesson-modal-body .hw-file-btn {
   width: 100%;
-  margin-top: 6px;
-  margin-bottom: 0;
+  margin: 8px 0 0;
   overflow-wrap: anywhere;
   word-break: break-word;
   text-align: left;
 }
 
 .lesson-modal-body .hw-entry-num {
-  font-size: 0.78rem;
-  margin-bottom: 6px;
-  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 8px;
+  color: var(--brand-green);
 }
 
+/* Кнопка удаления ДЗ — красная, чтобы не путать со «Скачать» */
+.lesson-modal-body .hw-del-hw {
+  color: var(--danger);
+  background: var(--surface);
+  border: 1px solid rgba(255, 115, 115, 0.32);
+  margin: 10px 0 0;
+}
+
+.lesson-modal-body .hw-del-hw:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
+/* Форма «прикрепить к этой паре» — отдельная карточка с синей полоской */
 .modal-elder-hw {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand-blue);
+  border-radius: var(--radius-md);
+  padding: 16px 16px 14px;
+  margin-top: 14px;
 }
 
 .modal-elder-hw-title {
-  font-size: 0.98rem;
-  margin: 0 0 6px;
-  font-weight: 600;
+  font-size: 1.02rem;
+  margin: 0 0 4px;
+  font-weight: 700;
   color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .modal-elder-hw label {

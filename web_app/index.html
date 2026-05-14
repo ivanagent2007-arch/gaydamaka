@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, maximum-scale=1"
     />
     <title>Расписание</title>
-    <link rel="stylesheet" href="styles.css?v=4" />
+    <link rel="stylesheet" href="styles.css?v=5" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -53,8 +53,8 @@
       </div>
     </div>
 
-    <script src="api.js?v=4"></script>
-    <script src="nav.js?v=4"></script>
+    <script src="api.js?v=5"></script>
+    <script src="nav.js?v=5"></script>
     <script>
       const DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -395,7 +395,7 @@
               entriesHtml =
                 '<p class="muted" style="margin:0">Староста пока не прикрепил ДЗ и файлы к этой паре.</p>';
             } else {
-              entriesHtml = entries
+              const entryCards = entries
                 .map((e, i) => {
                   const desc =
                     '<p class="hw-desc">' +
@@ -417,14 +417,14 @@
                     .join("");
                   const delRow =
                     meIsElder && e.id
-                      ? '<p style="margin:8px 0 0"><button type="button" class="secondary hw-del-hw" data-hw-id="' +
+                      ? '<button type="button" class="secondary hw-del-hw" data-hw-id="' +
                         e.id +
-                        '">Удалить это ДЗ</button></p>'
+                        '">Удалить это ДЗ</button>'
                       : "";
                   return (
                     '<div class="hw-entry">' +
                     (entries.length > 1
-                      ? '<div class="muted hw-entry-num">Запись ' + (i + 1) + "</div>"
+                      ? '<div class="hw-entry-num">Запись ' + (i + 1) + "</div>"
                       : "") +
                     desc +
                     files +
@@ -433,6 +433,9 @@
                   );
                 })
                 .join("");
+              entriesHtml =
+                '<div class="modal-section-title">Прикреплённое ДЗ</div>' +
+                entryCards;
             }
 
             let elderHtml = "";
