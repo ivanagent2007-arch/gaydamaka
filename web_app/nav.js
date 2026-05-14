@@ -6,7 +6,7 @@
   var mainTabs = [
     { href: "index.html", match: ["index.html", ""], label: "Расписание" },
     { href: "deadlines.html", match: ["deadlines.html"], label: "Дедлайны" },
-    { href: "profile.html", match: ["profile.html"], label: "Мои баллы" },
+    { href: "profile.html", match: ["profile.html"], label: "Баллы" },
   ];
 
   var moreTabs = [

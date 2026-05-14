@@ -11,14 +11,14 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
       .profile-user-card {
-        padding: 16px 18px;
+        padding: 18px 20px;
         background: linear-gradient(
-          125deg,
-          rgba(91, 140, 255, 0.14) 0%,
-          rgba(26, 35, 50, 0.92) 48%
+          135deg,
+          var(--brand-green-soft) 0%,
+          var(--brand-blue-soft) 100%
         );
-        border: 1px solid rgba(91, 140, 255, 0.18);
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--brand-green);
+        box-shadow: var(--shadow-sm);
       }
       .profile-user-inner {
         display: flex;
@@ -27,15 +27,15 @@
       }
       .profile-user-name {
         font-weight: 700;
-        font-size: 1.08rem;
+        font-size: 1.1rem;
         letter-spacing: -0.02em;
         line-height: 1.25;
-        color: var(--text);
+        color: var(--brand-green-dark);
       }
       .profile-user-meta {
-        font-size: 0.86rem;
+        font-size: 0.88rem;
         line-height: 1.4;
-        color: var(--muted);
+        color: var(--text);
       }
 
       .profile-sem-row {
@@ -46,21 +46,21 @@
         margin: 0 0 4px;
         font-size: 0.78rem;
         font-weight: 600;
-        color: var(--muted);
+        color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.04em;
       }
       .profile-sem-row select {
-        margin: 0 0 0;
+        margin: 0;
       }
 
       .profile-table-wrap {
         margin-top: 6px;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
         overflow-x: auto;
         overflow-y: hidden;
-        background: rgba(15, 20, 25, 0.35);
+        background: var(--surface);
         -webkit-overflow-scrolling: touch;
       }
       .profile-grades-table,
@@ -70,13 +70,13 @@
       }
       .profile-grades-table thead th,
       .profile-site-table thead th {
-        background: rgba(91, 140, 255, 0.11);
+        background: var(--surface-alt);
         font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--muted);
-        font-weight: 600;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-muted);
+        font-weight: 700;
+        border-bottom: 1px solid var(--border);
         padding: 11px 10px;
         white-space: nowrap;
       }
@@ -92,7 +92,7 @@
       @media (hover: hover) {
         .profile-grades-table tbody tr:hover,
         .profile-site-table tbody tr:hover {
-          background: rgba(91, 140, 255, 0.07);
+          background: var(--brand-blue-soft);
         }
       }
       .profile-grades-table tbody tr:last-child td,
@@ -100,9 +100,11 @@
         border-bottom-color: transparent;
       }
       .profile-grades-table tfoot td {
-        border-top: 1px solid rgba(91, 140, 255, 0.22);
+        border-top: 1px solid var(--brand-green);
         padding-top: 12px;
-        background: rgba(91, 140, 255, 0.05);
+        background: var(--brand-green-soft);
+        font-weight: 600;
+        color: var(--brand-green-dark);
       }
 
       .profile-elder .block-title {
@@ -113,7 +115,7 @@
         margin: 14px 0 4px;
         font-size: 0.78rem;
         font-weight: 600;
-        color: var(--muted);
+        color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.04em;
       }
@@ -122,7 +124,7 @@
       }
       .profile-elder select,
       .profile-elder input {
-        margin: 0 0 0;
+        margin: 0;
       }
       .profile-elder #saveG {
         margin-top: 18px;

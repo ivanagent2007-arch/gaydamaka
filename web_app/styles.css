@@ -1,10 +1,60 @@
+/* =========================================================================
+   Помощник старосты — мини-приложение.
+   Цветовая схема: зелёно-сине-белая (бренд Финансового университета).
+   ========================================================================= */
+
 :root {
-  --bg: #0f1419;
-  --card: #1a2332;
-  --text: #e7ecf3;
-  --muted: #8b9bb4;
-  --accent: #5b8cff;
-  --ok: #3dd68c;
+  /* Бренд */
+  --brand-green: #006937;        /* основной зелёный (логотип ФинУна) */
+  --brand-green-hover: #00853f;
+  --brand-green-dark: #004f29;
+  --brand-green-soft: #e4f3ea;   /* фон для выделений / активных чипов */
+  --brand-blue: #1f5fa6;         /* вторичный синий — ссылки, акценты */
+  --brand-blue-hover: #194e88;
+  --brand-blue-soft: #e8f0f9;
+
+  /* Поверхности */
+  --bg: #f2f5f9;                 /* фон страницы */
+  --surface: #ffffff;            /* карточки */
+  --surface-alt: #f7fafd;        /* вложенные блоки, шапки таблиц */
+  --border: #e2e8ef;
+  --border-strong: #cbd4de;
+
+  /* Текст */
+  --text: #1f2937;
+  --text-muted: #5a6b7b;
+  --text-on-primary: #ffffff;
+
+  /* Статусы */
+  --ok: #2e7d32;
+  --ok-soft: #e6f2e7;
+  --warn-soft: #fff4dd;
+  --warn-fg: #8a5300;
+  --danger: #b00020;
+  --danger-soft: #fde7e9;
+
+  /* Совместимость со старым кодом (некоторые страницы пользуются var(--accent), var(--card)) */
+  --accent: var(--brand-green);
+  --card: var(--surface);
+  --muted: var(--text-muted);
+
+  /* Тени */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 6px 22px rgba(15, 23, 42, 0.08);
+
+  /* Радиусы */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+}
+
+/* =========================================================================
+   Базовая раскладка
+   ========================================================================= */
+
+* {
+  box-sizing: border-box;
 }
 
 html,
@@ -14,270 +64,99 @@ body {
   overflow-x: hidden;
 }
 
-* {
-  box-sizing: border-box;
-}
-
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  padding: 12px 14px 72px;
-  padding-top: max(12px, env(safe-area-inset-top));
-  padding-bottom: max(72px, calc(56px + env(safe-area-inset-bottom)));
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 14px 14px 78px;
+  padding-top: max(14px, env(safe-area-inset-top));
+  padding-bottom: max(78px, calc(64px + env(safe-area-inset-bottom)));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 header {
   display: block;
-  margin-bottom: 12px;
+  margin: 0 0 14px;
+  padding: 0 2px;
 }
 
 h1 {
-  font-size: 1.15rem;
-  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin: 0 0 4px;
+  color: var(--text);
+  /* Тонкая зелёная полоска слева как мини-«флаг» вуза */
+  border-left: 4px solid var(--brand-green);
+  padding-left: 10px;
+  line-height: 1.25;
 }
 
-/* Единый «лид» под заголовком вкладки */
 .app-page-lead {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
+  padding-left: 14px;
   font-size: 0.85rem;
-  line-height: 1.4;
+  line-height: 1.45;
+  color: var(--text-muted);
   max-width: 36rem;
 }
 
-/* Заголовок секции вне карточки (как «Активные дедлайны») */
 .section-heading {
-  margin: 18px 0 10px;
+  margin: 20px 0 10px;
   font-size: 1.02rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   color: var(--text);
 }
 
-/* Заголовок блока внутри карточки */
 .block-title {
   margin: 0 0 8px;
   padding-bottom: 10px;
   font-size: 1.02rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  letter-spacing: -0.01em;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
 }
 
 .block-desc {
   margin: 0 0 14px;
-  font-size: 0.82rem;
-  line-height: 1.45;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 .block-desc code {
-  font-size: 0.78em;
-  padding: 2px 6px;
+  font-size: 0.82em;
+  padding: 1px 6px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--brand-blue);
 }
 
-/* Список строк внутри одной карточки (посещаемость, ДР, состав) */
-.list-in-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 40px;
-}
-
-.list-in-card > .att-row,
-.list-in-card > .bday-row,
-.list-in-card > .member-row {
-  margin: 0;
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
-  background: rgba(15, 20, 25, 0.55);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-
-.list-in-card > .bday-row.bday-today {
-  margin: 0;
-}
-
-@media (hover: hover) {
-  .list-in-card > .att-row:hover,
-  .list-in-card > .bday-row:hover,
-  .list-in-card > .member-row:hover {
-    border-color: rgba(91, 140, 255, 0.28);
-    background: rgba(91, 140, 255, 0.06);
-  }
-}
-
-.member-list-head {
-  margin: 0 0 4px;
-  font-size: 0.86rem;
-}
-
-/* Таблица внутри карточки (отчёт старосты) */
-.table-in-card {
-  margin-top: 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  overflow-x: auto;
-  background: rgba(15, 20, 25, 0.35);
-  -webkit-overflow-scrolling: touch;
-}
-
-.table-in-card table {
-  margin: 0;
-  font-size: 0.88rem;
-}
-
-.table-in-card thead th {
-  background: rgba(91, 140, 255, 0.11);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-  font-weight: 600;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 11px 10px;
-  white-space: nowrap;
-}
-
-.table-in-card td {
-  padding: 10px;
-  vertical-align: top;
-}
-
-.att-lessons-list {
-  margin: 0 0 10px;
-  padding-left: 18px;
-  font-size: 0.88rem;
-  line-height: 1.45;
-}
-
-.att-lessons-list li {
-  margin: 4px 0;
-}
-
-/* Тайный Санта: имя получателя */
-.santa-receiver {
-  margin: 12px 0 0;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba(91, 140, 255, 0.12);
-  border: 1px solid rgba(91, 140, 255, 0.22);
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  text-align: center;
-}
-
-nav a {
-  color: var(--accent);
-  text-decoration: none;
-  margin-left: 10px;
-  font-size: 0.9rem;
-}
-
-body a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-body a:active {
-  opacity: 0.88;
-}
-
-.app-tabbar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  display: flex;
-  justify-content: space-around;
-  align-items: stretch;
-  padding: 6px 2px max(6px, env(safe-area-inset-bottom));
-  background: var(--card);
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.35);
-}
-
-.app-tab {
-  flex: 1;
-  text-align: center;
-  padding: 8px 4px;
-  font-size: 0.72rem;
-  line-height: 1.2;
-  color: var(--muted);
-  text-decoration: none;
-  max-width: 26%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  transition: color 0.15s ease, background 0.15s ease;
-}
-
-.app-tab.active {
-  color: var(--accent);
-  font-weight: 600;
-  background: rgba(91, 140, 255, 0.12);
-}
+/* =========================================================================
+   Карточки
+   ========================================================================= */
 
 .card {
-  background: var(--card);
-  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
   margin-bottom: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-sm);
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
 }
 
-.muted {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.lesson {
-  border-left: 3px solid var(--accent);
-  padding-left: 10px;
-  margin-bottom: 10px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 8px 6px;
-  border-bottom: 1px solid #2a3548;
-}
-
-input,
-select,
-button,
-textarea {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  margin: 6px 0 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid #2a3548;
-  background: #121a26;
-  color: var(--text);
-  font-size: 1rem;
-}
-
-/* На узких экранах длинные подписи/значения не должны "раздувать" контейнеры. */
+/* На узких экранах длинные подписи/значения не должны "раздувать" контейнер. */
 .card > *,
 .card label,
 .card p,
@@ -291,91 +170,591 @@ textarea {
   min-width: 0;
 }
 
-button {
-  background: var(--accent);
-  border: none;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-button.secondary {
-  background: #2a3548;
-}
-
-.err {
-  color: #ff7b7b;
+.muted {
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
-.need-group {
-  margin: 0 0 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(255, 180, 80, 0.18);
-  border: 1px solid rgba(255, 180, 80, 0.45);
-  font-size: 0.9rem;
-  line-height: 1.4;
+.err {
+  color: var(--danger);
+  font-size: 0.85rem;
+  padding: 4px 2px;
 }
 
-/* --- More popup --- */
+/* =========================================================================
+   Кнопки
+   ========================================================================= */
+
+/* По умолчанию форменные кнопки на всю ширину карточки.
+   Для инлайновых кнопок есть классы-исключения ниже (week-nav-btn, att-btn и пр.). */
+button {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 6px 0 10px;
+  padding: 11px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--brand-green);
+  color: var(--text-on-primary);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+button:hover {
+  background: var(--brand-green-hover);
+}
+
+button:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+button:disabled {
+  background: var(--border-strong);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+button.secondary {
+  background: var(--surface);
+  color: var(--brand-green);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+}
+
+button.secondary:hover {
+  background: var(--brand-green-soft);
+  border-color: var(--brand-green);
+}
+
+/* Поля ввода */
+input,
+select,
+textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 6px 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--brand-green);
+  box-shadow: 0 0 0 3px rgba(0, 105, 55, 0.12);
+}
+
+input[type="file"] {
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+/* Ссылки */
+body a {
+  color: var(--brand-blue);
+  text-decoration: none;
+}
+
+body a:hover {
+  text-decoration: underline;
+}
+
+body a:active {
+  opacity: 0.8;
+}
+
+/* =========================================================================
+   Нижний таб-бар
+   ========================================================================= */
+
+.app-tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-around;
+  align-items: stretch;
+  padding: 6px 4px max(6px, env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 18px rgba(15, 23, 42, 0.06);
+}
+
+.app-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  padding: 8px 4px;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  color: var(--text-muted);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  transition: color 0.15s ease, background 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.app-tab:hover {
+  text-decoration: none;
+  color: var(--brand-green);
+}
+
+.app-tab.active {
+  color: var(--brand-green);
+  font-weight: 700;
+  background: var(--brand-green-soft);
+}
+
 .app-tab-more {
   background: none;
   border: none;
-  width: auto;
   margin: 0;
   padding: 8px 4px;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   cursor: pointer;
+  color: var(--text-muted);
+  box-shadow: none;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.app-tab-more:hover {
+  background: var(--brand-green-soft);
+  color: var(--brand-green);
+}
+
+.app-tab-more.active {
+  color: var(--brand-green);
+  background: var(--brand-green-soft);
+  font-weight: 700;
 }
 
 .more-popup {
   position: fixed;
-  bottom: 56px;
+  bottom: 60px;
   right: 8px;
   z-index: 200;
-  background: var(--card);
-  border-radius: 14px;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.45);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   padding: 6px 0;
-  min-width: 180px;
+  min-width: 200px;
+  max-width: calc(100vw - 24px);
 }
 
 .more-item {
   display: block;
-  padding: 12px 18px;
+  padding: 11px 18px;
   color: var(--text);
   text-decoration: none;
-  font-size: 0.92rem;
+  font-size: 0.93rem;
   transition: background 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.more-item:hover,
-.more-item:active {
-  background: rgba(91, 140, 255, 0.1);
+.more-item:hover {
+  background: var(--brand-green-soft);
+  text-decoration: none;
 }
 
 .more-item.active {
-  color: var(--accent);
+  color: var(--brand-green);
+  font-weight: 600;
+  background: var(--brand-green-soft);
+}
+
+/* =========================================================================
+   Бейдж «нужна группа» сверху страницы
+   ========================================================================= */
+
+.need-group {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--warn-soft);
+  border: 1px solid #f0c878;
+  color: var(--warn-fg);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* =========================================================================
+   Расписание: неделя, чипы дней, список пар
+   ========================================================================= */
+
+.schedule-panel {
+  margin-top: 4px;
+}
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+}
+
+.week-nav-btn {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 14px;
+  min-width: 44px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.week-label {
+  flex: 1;
+  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.day-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  justify-content: space-between;
+  overflow-x: auto;
+  margin-bottom: 12px;
+  padding: 10px 10px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.day-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.day-chip {
+  width: auto;
+  min-width: 40px;
+  flex: 1 1 0;
+  margin: 0;
+  padding: 8px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  box-shadow: none;
+  font-weight: 500;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.day-chip:hover {
+  background: var(--brand-green-soft);
+  border-color: var(--brand-green);
+  color: var(--brand-green);
+}
+
+.day-chip-dow {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.day-chip-num {
+  font-size: 0.95rem;
+  color: var(--text);
   font-weight: 600;
 }
 
-/* --- Deadline cards (мини-приложение «Дедлайны») --- */
-.deadline-card {
-  margin: 0;
-  padding: 14px 16px 12px;
-  background: rgba(15, 20, 25, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+.day-chip.active {
+  background: var(--brand-green);
+  border-color: var(--brand-green);
+  color: var(--text-on-primary);
 }
 
-@media (hover: hover) {
-  .deadline-card:hover {
-    border-color: rgba(91, 140, 255, 0.35);
-    background: rgba(91, 140, 255, 0.06);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
-  }
+.day-chip.active .day-chip-num,
+.day-chip.active .day-chip-dow {
+  color: var(--text-on-primary);
+}
+
+.day-chip.has-lessons:not(.active) .day-chip-num {
+  color: var(--brand-green);
+}
+
+.lessons-card {
+  min-height: 80px;
+}
+
+.lessons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Без !important display:flex перебивает атрибут [hidden]. */
+.lessons-list[hidden] {
+  display: none !important;
+}
+
+.lesson-row {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand-blue);
+  border-radius: var(--radius-md);
+  padding: 12px 22px 12px 14px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.4;
+  box-shadow: var(--shadow-sm);
+  font-weight: 400;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lesson-row:hover {
+  background: var(--brand-blue-soft);
+  border-color: var(--brand-blue);
+  border-left-color: var(--brand-blue);
+  box-shadow: var(--shadow-md);
+}
+
+.lesson-row:active {
+  background: var(--brand-blue-soft);
+}
+
+.lesson-slot-num {
+  display: inline-block;
+  min-width: 1.35em;
+  margin-right: 4px;
+  color: var(--brand-green);
+  font-weight: 700;
+  font-size: 0.92em;
+}
+
+.lesson-row-cont {
+  margin-top: -6px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-left: 3px solid var(--brand-blue);
+  background: var(--surface-alt);
+}
+
+.hw-dot {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* =========================================================================
+   Модалка пары
+   ========================================================================= */
+
+.lesson-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.lesson-modal[hidden] {
+  display: none !important;
+}
+
+.lesson-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  border: none;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.lesson-modal-sheet {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 520px;
+  border-radius: 16px 16px 0 0;
+  max-height: 88vh;
+  overflow-y: auto;
+  margin: 0;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.lesson-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lesson-modal-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.lesson-modal-close {
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 1rem;
+}
+
+.lesson-modal-meta {
+  margin: 8px 0 12px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.lesson-modal-body .hw-entry {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.lesson-modal-body .hw-entry:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.lesson-modal-body .hw-desc {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.lesson-modal-body .hw-file-btn {
+  width: 100%;
+  margin-top: 6px;
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: left;
+}
+
+.lesson-modal-body .hw-entry-num {
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+}
+
+.modal-elder-hw {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.modal-elder-hw-title {
+  font-size: 0.98rem;
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.modal-elder-hw label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 10px 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.modal-elder-hw textarea {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+}
+
+.modal-elder-hw input[type="file"] {
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.modal-elder-hw #modalElderHwSave {
+  margin-top: 12px;
+}
+
+/* =========================================================================
+   Дедлайны
+   ========================================================================= */
+
+.deadline-card {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.deadline-card:hover {
+  border-color: var(--brand-blue);
+  box-shadow: var(--shadow-md);
 }
 
 .deadline-card-head {
@@ -386,22 +765,24 @@ button.secondary {
   display: block;
   font-size: 1.03rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   line-height: 1.3;
   margin: 0 0 4px;
+  color: var(--text);
 }
 
 .deadline-subject {
   display: block;
   margin-top: 6px;
-  font-size: 0.82rem;
+  font-size: 0.83rem;
   line-height: 1.35;
+  color: var(--text-muted);
 }
 
 .deadline-desc {
   margin: 10px 0 0;
-  font-size: 0.88rem;
-  line-height: 1.45;
+  font-size: 0.9rem;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -429,35 +810,139 @@ button.secondary {
 
 .deadline-del-wrap .secondary {
   width: 100%;
+  color: var(--danger);
+  border-color: var(--danger-soft);
+}
+
+.deadline-del-wrap .secondary:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
 .countdown {
   margin-top: 12px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: rgba(91, 140, 255, 0.14);
-  color: var(--accent);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--brand-green-soft);
+  color: var(--brand-green-dark);
   font-weight: 600;
-  font-size: 0.86rem;
-  display: block;
-  width: fit-content;
+  font-size: 0.84rem;
+  display: inline-block;
   max-width: 100%;
   line-height: 1.35;
+  border: 1px solid rgba(0, 105, 55, 0.18);
 }
 
 .countdown.expired {
-  background: rgba(255, 123, 123, 0.16);
-  color: #ff7b7b;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: rgba(176, 0, 32, 0.18);
 }
 
-/* --- Attendance rows --- */
+/* =========================================================================
+   Списки внутри карточек: посещаемость, ДР, состав
+   ========================================================================= */
+
+.list-in-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.list-in-card > .att-row,
+.list-in-card > .bday-row,
+.list-in-card > .member-row {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.list-in-card > .att-row:hover,
+.list-in-card > .bday-row:hover,
+.list-in-card > .member-row:hover {
+  border-color: var(--brand-green);
+  background: var(--brand-green-soft);
+}
+
+.member-list-head {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+/* Таблицы */
+.table-in-card {
+  margin-top: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table-in-card table {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.table-in-card thead th,
+table thead th {
+  background: var(--surface-alt);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+  padding: 11px 10px;
+  white-space: nowrap;
+}
+
+.table-in-card td {
+  padding: 10px;
+  vertical-align: top;
+  color: var(--text);
+}
+
+.att-lessons-list {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.att-lessons-list li {
+  margin: 4px 0;
+}
+
+/* =========================================================================
+   Посещаемость: строки
+   ========================================================================= */
+
 .att-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
 }
 
 .att-row:last-child {
@@ -467,7 +952,7 @@ button.secondary {
 .att-info {
   flex: 1;
   min-width: 0;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   line-height: 1.35;
 }
 
@@ -475,25 +960,47 @@ button.secondary {
   flex-shrink: 0;
   width: auto;
   padding: 8px 14px;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   border-radius: 10px;
   white-space: nowrap;
+  margin: 0;
 }
 
 .att-btn.att-done {
   background: var(--ok);
-  color: #0f1419;
+  color: var(--text-on-primary);
   cursor: default;
 }
 
-/* --- Birthday rows --- */
+.att-btn.att-done:hover {
+  background: var(--ok);
+}
+
+.att-report-sum {
+  margin: 10px 0 12px;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.att-report-sum-ok strong {
+  color: var(--ok);
+}
+
+.att-report-sum-warn strong {
+  color: var(--warn-fg);
+}
+
+/* =========================================================================
+   Дни рождения
+   ========================================================================= */
+
 .bday-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
 }
 
 .bday-row:last-child {
@@ -501,10 +1008,11 @@ button.secondary {
 }
 
 .bday-row.bday-today {
-  background: rgba(61, 214, 140, 0.08);
-  border-radius: 10px;
-  padding: 10px;
-  margin: -2px -6px;
+  background: var(--ok-soft);
+  border: 1px solid rgba(46, 125, 50, 0.25);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  margin: 0;
 }
 
 .bday-info {
@@ -516,341 +1024,42 @@ button.secondary {
 .bday-badge {
   flex-shrink: 0;
   padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 0.8rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
   font-weight: 600;
-  background: rgba(91, 140, 255, 0.12);
-  color: var(--accent);
+  background: var(--brand-blue-soft);
+  color: var(--brand-blue);
   white-space: nowrap;
+  border: 1px solid rgba(31, 95, 166, 0.2);
 }
 
 .bday-badge.today {
-  background: rgba(61, 214, 140, 0.18);
+  background: var(--ok-soft);
   color: var(--ok);
+  border-color: rgba(46, 125, 50, 0.25);
 }
 
-/* --- Schedule tab: week + day + lessons --- */
-.schedule-panel {
-  margin-top: 4px;
-}
+/* =========================================================================
+   Тайный Санта
+   ========================================================================= */
 
-.week-nav {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.week-nav-btn {
-  width: auto;
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 8px 14px;
-  min-width: 44px;
-}
-
-.week-label {
-  flex: 1;
-  text-align: center;
-  font-size: 0.88rem;
-  margin: 0;
-  line-height: 1.35;
-  color: var(--text);
-}
-
-.day-chips {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 6px;
-  justify-content: space-between;
-  overflow-x: auto;
-  margin-bottom: 12px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.day-chips::-webkit-scrollbar {
-  display: none;
-}
-
-.day-chip {
-  width: auto;
-  min-width: 40px;
-  flex: 1 1 0;
-  margin: 0;
-  padding: 8px 4px;
-  background: #121a26;
-  border: 1px solid #2a3548;
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  font-size: 0.7rem;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.day-chip-dow {
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.day-chip-num {
-  font-size: 0.85rem;
-  color: var(--text);
-}
-
-.day-chip.active {
-  background: rgba(91, 140, 255, 0.18);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.day-chip.active .day-chip-num {
-  color: var(--accent);
-}
-
-.day-chip.has-lessons:not(.active) .day-chip-num {
-  font-weight: 600;
-}
-
-.lessons-card {
-  min-height: 80px;
-}
-
-.lessons-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Иначе display:flex перебивает атрибут [hidden], и список остаётся видимым. */
-.lessons-list[hidden] {
-  display: none !important;
-}
-
-.lesson-row {
-  position: relative;
-  width: 100%;
-  margin: 0;
-  text-align: left;
-  background: #121a26;
-  border: 1px solid #2a3548;
-  border-radius: 12px;
-  padding: 12px 22px 12px 12px;
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  line-height: 1.35;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-}
-
-@media (hover: hover) {
-  .lesson-row:hover {
-    border-color: rgba(91, 140, 255, 0.35);
-    background: rgba(91, 140, 255, 0.08);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
-  }
-}
-
-.lesson-row:active {
-  background: #1a2636;
-  border-color: rgba(91, 140, 255, 0.25);
-}
-
-.lesson-slot-num {
-  display: inline-block;
-  min-width: 1.35em;
-  margin-right: 4px;
-  color: var(--muted);
-  font-weight: 600;
-  font-size: 0.88em;
-}
-
-.lesson-row-cont {
-  margin-top: -6px;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  border-left: 3px solid rgba(91, 140, 255, 0.35);
-  padding-left: 15px;
-}
-
-.hw-dot {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--ok);
-  box-shadow: 0 0 0 2px var(--card);
-}
-
-.lesson-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 400;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.lesson-modal[hidden] {
-  display: none !important;
-}
-
-.lesson-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.52);
-  border: none;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-}
-
-.lesson-modal-sheet {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 520px;
-  border-radius: 16px 16px 0 0;
-  max-height: 88vh;
-  overflow-y: auto;
-  margin: 0;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
-}
-
-.lesson-modal-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.lesson-modal-title {
-  font-size: 1rem;
-  margin: 0;
-  flex: 1;
-  min-width: 0;
+.santa-receiver {
+  margin: 12px 0 0;
+  padding: 18px 16px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--brand-green-soft) 0%, var(--brand-blue-soft) 100%);
+  border: 1px solid var(--brand-green);
+  color: var(--brand-green-dark);
+  font-size: 1.18rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1.3;
+  text-align: center;
 }
 
-.lesson-modal-close {
-  width: auto;
-  margin: 0;
-  flex-shrink: 0;
-  padding: 6px 12px;
-}
-
-.lesson-modal-meta {
-  margin: 8px 0 12px;
-  font-size: 0.82rem;
-  line-height: 1.4;
-}
-
-.lesson-modal-body .hw-entry {
-  margin-bottom: 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.lesson-modal-body .hw-entry:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
-.lesson-modal-body .hw-desc {
-  margin: 0 0 8px;
-  font-size: 0.9rem;
-  white-space: pre-wrap;
-}
-
-.lesson-modal-body .hw-file-btn {
-  width: 100%;
-  margin-top: 6px;
-  margin-bottom: 0;
-}
-
-.lesson-modal-body .hw-entry-num {
-  font-size: 0.78rem;
-  margin-bottom: 6px;
-}
-
-.modal-elder-hw {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.modal-elder-hw-title {
-  font-size: 0.95rem;
-  margin: 0 0 6px;
-  font-weight: 600;
-}
-
-.modal-elder-hw label {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin: 10px 0 4px;
-}
-
-.modal-elder-hw textarea {
-  width: 100%;
-  min-height: 88px;
-  resize: vertical;
-}
-
-.modal-elder-hw input[type="file"] {
-  width: 100%;
-  padding: 8px 0;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-}
-
-.modal-elder-hw #modalElderHwSave {
-  margin-top: 12px;
-}
-
-.elder-hw-panel .elder-hw-title {
-  margin-top: 0;
-  font-size: 1rem;
-}
-
-.elder-hw-panel textarea {
-  min-height: 88px;
-  resize: vertical;
-}
-
-.elder-hw-panel input[type="file"] {
-  padding: 8px 0;
-  border: none;
-  background: transparent;
-}
-
-.att-report-sum {
-  margin: 10px 0 12px;
-  line-height: 1.45;
-  font-size: 0.95rem;
-}
-
-.att-report-sum-ok strong {
-  color: #9ccc65;
-}
-
-.att-report-sum-warn strong {
-  color: #ffb74d;
-}
+/* =========================================================================
+   Состав группы
+   ========================================================================= */
 
 .member-row {
   display: flex;
@@ -858,7 +1067,7 @@ button.secondary {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
 }
 
 .member-row:last-child {
@@ -869,6 +1078,8 @@ button.secondary {
   flex: 1;
   min-width: 0;
   word-break: break-word;
+  font-size: 0.93rem;
+  line-height: 1.4;
 }
 
 .member-actions {
@@ -879,7 +1090,7 @@ button.secondary {
   flex-shrink: 0;
 }
 
-/* Глобально у button width:100% — кнопки в строке участника не на всю ширину */
+/* Глобально button:width:100% — переопределяем для инлайновых action-кнопок */
 .member-row .member-kick-btn,
 .member-row .member-deputy-btn {
   flex-shrink: 0;
@@ -888,5 +1099,49 @@ button.secondary {
   margin: 0;
   white-space: nowrap;
   font-size: 0.82rem;
-  padding: 6px 10px;
+  padding: 6px 12px;
+  font-weight: 500;
+}
+
+.member-row .member-kick-btn {
+  color: var(--danger);
+  background: var(--surface);
+  border: 1px solid var(--danger-soft);
+}
+
+.member-row .member-kick-btn:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
+/* =========================================================================
+   Профиль / баллы
+   ========================================================================= */
+
+.lesson {
+  border-left: 3px solid var(--brand-green);
+  padding-left: 10px;
+  margin-bottom: 10px;
+}
+
+/* =========================================================================
+   Узкие экраны
+   ========================================================================= */
+
+@media (max-width: 360px) {
+  body {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .card {
+    padding: 12px 12px;
+  }
+  .app-tab,
+  .app-tab-more {
+    font-size: 0.68rem;
+    padding: 8px 2px;
+  }
+  h1 {
+    font-size: 1.15rem;
+  }
 }
