@@ -8,6 +8,9 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+# Опциональный ключ для шифрования секретов в БД (IMAP-пароли, cookies org.fa.ru).
+# Если не задан — выводится из BOT_TOKEN. Смена ключа делает старые шифрованные значения нечитаемыми.
+SECRET_ENCRYPTION_KEY = os.getenv("SECRET_ENCRYPTION_KEY", "").strip()
 ELSTAROST_TELEGRAM_IDS = [
     int(x.strip())
     for x in os.getenv("ELSTAROST_TELEGRAM_IDS", "").split(",")
@@ -33,6 +36,15 @@ RUZ_SCHEDULE_FUTURE_DAYS = max(0, min(_RUZ_FUTURE, 730))
 # Одна порция запроса к JSON API РУЗ (месяцев ~2); иначе длинный интервал даёт ошибку или таймаут.
 _RUZ_CHUNK = int(os.getenv("RUZ_API_CHUNK_DAYS", "56").strip() or "56")
 RUZ_API_CHUNK_DAYS = max(14, min(_RUZ_CHUNK, 120))
+
+# Фоновая досинхронизация расписания с РУЗ — чтобы видеть смены аудиторий, отмены, замены и т.п.,
+# без ожидания, пока староста вручную нажмёт /update_schedule. Окно: только ближняя окрестность сегодня.
+_RUZ_REFRESH_H = float(os.getenv("RUZ_SCHEDULE_REFRESH_HOURS", "2").strip() or "2")
+RUZ_SCHEDULE_REFRESH_HOURS = max(0.25, min(_RUZ_REFRESH_H, 24.0))
+_RUZ_REFRESH_PAST = int(os.getenv("RUZ_SCHEDULE_REFRESH_PAST_DAYS", "14").strip() or "14")
+_RUZ_REFRESH_FUTURE = int(os.getenv("RUZ_SCHEDULE_REFRESH_FUTURE_DAYS", "45").strip() or "45")
+RUZ_SCHEDULE_REFRESH_PAST_DAYS = max(0, min(_RUZ_REFRESH_PAST, 90))
+RUZ_SCHEDULE_REFRESH_FUTURE_DAYS = max(7, min(_RUZ_REFRESH_FUTURE, 180))
 
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "0.0.0.0")
 WEBAPP_PORT = int(os.getenv("WEBAPP_PORT", "8080"))

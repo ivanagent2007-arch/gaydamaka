@@ -1205,12 +1205,13 @@ async def api_birthdays(request: web.Request) -> web.Response:
 async def api_uploaded_file(request: web.Request) -> web.StreamResponse:
     await _auth_user(request)
     rel = (request.query.get("path") or "").strip().replace("\\", "/")
-    if not rel or ".." in rel:
+    # Защита от пути с восходом в родителя или абсолютного — даже после resolve в Windows.
+    if not rel or ".." in rel or rel.startswith("/") or (len(rel) > 1 and rel[1] == ":"):
         raise web.HTTPForbidden()
     path = (config.BASE_DIR / rel).resolve()
-    try:
-        path.relative_to(config.BASE_DIR.resolve())
-    except ValueError:
+    # Жёсткое ограничение каталогом загрузок (а не BASE_DIR), иначе зарегистрированный юзер
+    # может скачать .env / config.py / data/bot.db.
+    if not any(_path_is_under(path, root) for root in _allowed_homework_upload_roots()):
         raise web.HTTPForbidden()
     if not path.is_file():
         raise web.HTTPNotFound()

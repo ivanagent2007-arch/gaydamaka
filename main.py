@@ -3,7 +3,6 @@ import logging
 import sys
 
 from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 from aiohttp import web
 
@@ -12,6 +11,7 @@ from database import init_db
 from handlers import register_handlers
 from middleware.db_session import DbSessionMiddleware
 from middleware.role_check import RoleMiddleware
+from utils.fsm_storage import SqlAlchemyStorage
 from utils.scheduler import setup_scheduler
 from web_server import create_app
 
@@ -60,7 +60,9 @@ async def main() -> None:
         BotCommand(command="group_members", description="Состав группы"),
         BotCommand(command="versions", description="История обновлений"),
     ])
-    dp = Dispatcher(storage=MemoryStorage())
+    # Персистентное FSM-хранилище: диалоги (создание группы, ввод дедлайна, загрузка ДЗ)
+    # переживают рестарт бота — состояние пишется в ту же БД, что и остальные данные.
+    dp = Dispatcher(storage=SqlAlchemyStorage())
     dp.update.middleware(DbSessionMiddleware())
     dp.update.middleware(RoleMiddleware())
     register_handlers(dp)

@@ -107,13 +107,13 @@ async def send_birthday_reminders(bot: Bot) -> None:
                 c.birthday_day, c.birthday_month, c.birth_year
             )
             if delta == 14:
-                text = f"🎂 Через 2 недели день рождения у {c.full_name} ({ds})."
+                msg = f"🎂 Через 2 недели день рождения у {c.full_name} ({ds})."
             elif delta == 7:
-                text = f"🎂 Через неделю день рождения у {c.full_name} ({ds})."
+                msg = f"🎂 Через неделю день рождения у {c.full_name} ({ds})."
             elif delta == 1:
-                text = f"🎂 Завтра день рождения у {c.full_name} ({ds})."
+                msg = f"🎂 Завтра день рождения у {c.full_name} ({ds})."
             else:
-                text = f"🎂 Сегодня день рождения у {c.full_name}! С праздником!"
+                msg = f"🎂 Сегодня день рождения у {c.full_name}! С праздником!"
             members = (
                 await session.scalars(
                     select(User).where(User.study_group_id == c.study_group_id)
@@ -125,9 +125,11 @@ async def send_birthday_reminders(bot: Bot) -> None:
                 targets = [u for u in members if u.role == UserRole.student]
             for m in targets:
                 try:
-                    await bot.send_message(m.telegram_id, text)
+                    await bot.send_message(m.telegram_id, msg)
                 except Exception as ex:
                     logger.debug("birthday notify %s: %s", m.telegram_id, ex)
+            # Коммит на каждого именинника: метка «уже отправлено» сохраняется
+            # сразу после рассылки, чтобы крах процесса позже не привёл к повтору.
             session.add(
                 BirthdayReminderSent(
                     celebrant_user_id=c.id,
@@ -135,7 +137,7 @@ async def send_birthday_reminders(bot: Bot) -> None:
                     kind=kind,
                 )
             )
-        await session.commit()
+            await session.commit()
 
 
 async def notify_deadlines_24h(bot: Bot) -> None:
@@ -159,17 +161,20 @@ async def notify_deadlines_24h(bot: Bot) -> None:
                 )
             ).all()
             subj = f" ({d.subject})" if d.subject else ""
-            text = (
+            msg = (
                 f"Напоминание: через ~24 часа дедлайн{subj}\n"
                 f"<b>{d.title}</b>\n{d.description[:500]}"
             )
             for u in users:
                 try:
-                    await bot.send_message(u.telegram_id, text, parse_mode="HTML")
+                    await bot.send_message(u.telegram_id, msg, parse_mode="HTML")
                 except Exception as ex:
                     logger.debug("deadline notify skip %s: %s", u.telegram_id, ex)
+            # Коммит на каждый дедлайн отдельно: если процесс упадёт после рассылки
+            # одного дедлайна, флаг по нему уже сохранён, а следующий запуск не
+            # отправит дубликат тем же пользователям.
             d.notified_24h = True
-        await session.commit()
+            await session.commit()
 
 
 async def poll_group_mail(bot: Bot) -> None:
@@ -193,6 +198,37 @@ async def poll_group_mail(bot: Bot) -> None:
             except Exception:
                 await session.rollback()
                 raise
+
+
+async def refresh_all_schedules() -> None:
+    """Фоновая сверка расписания каждой группы с РУЗ: подтягивает смены аудиторий, отмены,
+    замены преподавателей без участия старосты. Окно — узкая окрестность сегодня
+    (RUZ_SCHEDULE_REFRESH_PAST_DAYS … FUTURE_DAYS), чтобы один проход был быстрым."""
+    from handlers.schedule import sync_study_group_schedule_for_range  # ленивый импорт: handlers зависит от utils
+
+    today = date.today()
+    rng_lo = today - timedelta(days=config.RUZ_SCHEDULE_REFRESH_PAST_DAYS)
+    rng_hi = today + timedelta(days=config.RUZ_SCHEDULE_REFRESH_FUTURE_DAYS)
+    async with async_session_maker() as session:
+        group_ids = list(
+            await session.scalars(
+                select(StudyGroup.id).where(
+                    StudyGroup.ruz_group_search.isnot(None),
+                    StudyGroup.ruz_group_search != "",
+                )
+            )
+        )
+    for gid in group_ids:
+        async with async_session_maker() as session:
+            try:
+                sg = await session.get(StudyGroup, gid)
+                if sg is None:
+                    continue
+                await sync_study_group_schedule_for_range(session, sg, rng_lo, rng_hi)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                logger.exception("refresh_all_schedules: group_id=%s", gid)
 
 
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
@@ -221,5 +257,17 @@ def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
         args=[bot],
         id="poll_group_mail",
         replace_existing=True,
+    )
+    # Долгая сетевая работа (РУЗ-API на каждую группу) — не даём ей перекрываться сама с собой.
+    # next_run_time: первый прогон через 2 минуты после старта, чтобы не толкаться с другими job'ами.
+    sched.add_job(
+        refresh_all_schedules,
+        "interval",
+        hours=config.RUZ_SCHEDULE_REFRESH_HOURS,
+        id="ruz_schedule_refresh",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        next_run_time=_now_tz() + timedelta(minutes=2),
     )
     return sched

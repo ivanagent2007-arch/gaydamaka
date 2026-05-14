@@ -27,7 +27,7 @@ def validate_init_data(init_data: str) -> dict[str, Any]:
     calculated = hmac.new(
         secret_key, data_check_string.encode(), hashlib.sha256
     ).hexdigest()
-    if calculated != hash_received:
+    if not hmac.compare_digest(calculated, hash_received):
         raise ValueError("invalid hash")
 
     auth_raw = parsed.get("auth_date")

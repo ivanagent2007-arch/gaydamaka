@@ -18,8 +18,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 import config
+from utils.secrets_store import decrypt_secret, encrypt_secret
 
 
 class UserRole(str, Enum):
@@ -30,6 +32,21 @@ class UserRole(str, Enum):
 
 class Base(DeclarativeBase):
     pass
+
+
+class _EncryptedText(TypeDecorator):
+    """Прозрачное шифрование: на запись — encrypt_secret, на чтение — decrypt_secret.
+    Подкладочный тип — Text (ciphertext может быть длиннее исходного значения).
+    Старые plaintext-значения читаются без ошибок (см. decrypt_secret)."""
+
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return encrypt_secret(value) if value else value
+
+    def process_result_value(self, value, dialect):
+        return decrypt_secret(value) if value else value
 
 
 class StudyGroup(Base):
@@ -47,10 +64,10 @@ class StudyGroup(Base):
     )
     # Корпоративный ящик группы (логин IMAP = этот адрес)
     corporate_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # Пароль приложения / IMAP (хранится в БД — используйте отдельный пароль приложения)
-    imap_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # org.fa.ru — cookies браузерной сессии (для обхода 2FA)
-    org_cookies: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Пароль приложения / IMAP — шифруется на записи, расшифровывается на чтении.
+    imap_password: Mapped[str | None] = mapped_column(_EncryptedText, nullable=True)
+    # org.fa.ru — cookies браузерной сессии — тоже шифруются.
+    org_cookies: Mapped[str | None] = mapped_column(_EncryptedText, nullable=True)
 
     creator: Mapped["User | None"] = relationship(
         foreign_keys=[creator_user_id],
@@ -405,6 +422,25 @@ class SantaPair(Base):
     game: Mapped["SantaGame"] = relationship(back_populates="pairs")
 
 
+class FSMStateRow(Base):
+    """Персистентное FSM-состояние aiogram (вместо MemoryStorage): диалоги
+    переживают рестарт бота — староста не теряет шаг при настройке группы, ввод
+    дедлайна не сбрасывается и т.п."""
+
+    __tablename__ = "aiogram_fsm"
+
+    bot_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chat_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    thread_id: Mapped[int] = mapped_column(Integer, primary_key=True, default=0)
+    business_connection_id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=""
+    )
+    state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    data_json: Mapped[str] = mapped_column(Text, default="{}")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 engine = create_async_engine(config.DATABASE_URL, echo=False)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
@@ -703,3 +739,37 @@ async def init_db() -> None:
             await conn.run_sync(_migrate_sqlite_study_group_org_cookies)
             await conn.run_sync(_migrate_sqlite_site_grades_marks_json)
             await conn.run_sync(_migrate_sqlite_deadline_homework_id)
+    await _encrypt_legacy_secrets_at_rest()
+
+
+async def _encrypt_legacy_secrets_at_rest() -> None:
+    """Одноразовая миграция: шифрует имеющиеся plaintext-значения IMAP-паролей
+    и cookies org.fa.ru. Безопасно при повторных запусках — уже зашифрованные строки
+    (с префиксом ``enc:v1:``) пропускаются."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    async with async_session_maker() as session:
+        raw_rows = (
+            await session.execute(
+                text(
+                    "SELECT id, imap_password, org_cookies FROM study_groups "
+                    "WHERE (imap_password IS NOT NULL AND imap_password != '' "
+                    "AND imap_password NOT LIKE 'enc:v1:%') "
+                    "OR (org_cookies IS NOT NULL AND org_cookies != '' "
+                    "AND org_cookies NOT LIKE 'enc:v1:%')"
+                )
+            )
+        ).all()
+        if not raw_rows:
+            return
+        for row in raw_rows:
+            sg = await session.get(StudyGroup, row.id)
+            if sg is None:
+                continue
+            # Принудительно метим поля грязными — значения после ORM-чтения уже plaintext
+            # (decrypt пропустил их без префикса), и SQLAlchemy сам бы не увидел изменения.
+            if sg.imap_password:
+                flag_modified(sg, "imap_password")
+            if sg.org_cookies:
+                flag_modified(sg, "org_cookies")
+        await session.commit()

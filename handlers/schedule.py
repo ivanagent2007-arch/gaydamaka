@@ -149,7 +149,9 @@ async def sync_study_group_schedule_for_range(
     rng_lo: date,
     rng_hi: date,
 ) -> int:
-    """Загружает с РУЗ занятия за [rng_lo, rng_hi] и заменяет кэш группы только на этом интервале."""
+    """Сверяет [rng_lo, rng_hi] с РУЗ через UPSERT: совпавшие по ключу строки обновляются,
+    новые добавляются, пропавшие — удаляются. Schedule.id сохраняется для неизменных уроков,
+    чтобы Attendance.schedule_id (ON DELETE CASCADE) не терял посещаемость при пересинке."""
     if rng_lo > rng_hi:
         rng_lo, rng_hi = rng_hi, rng_lo
     ruz_q = ruz_search_for_group(sg)
@@ -161,10 +163,12 @@ async def sync_study_group_schedule_for_range(
         date_begin=rng_lo,
         date_end=rng_hi,
     )
+    used_fallback = False
     if not rows:
         today = date.today()
         if rng_lo <= today <= rng_hi:
             rows = fetch_schedule_html_fallback(sg.name, base_url=ruz_url)
+            used_fallback = bool(rows)
     if not rows:
         return 0
 
@@ -180,30 +184,71 @@ async def sync_study_group_schedule_for_range(
         seen.add(key)
         deduped.append(r)
 
-    await session.execute(
-        delete(Schedule).where(
-            Schedule.study_group_id == sg.id,
-            Schedule.lesson_date >= rng_lo,
-            Schedule.lesson_date <= rng_hi,
-        )
-    )
-    for r in deduped:
-        session.add(
-            Schedule(
-                study_group_id=sg.id,
-                group_name=sg.name,
-                lesson_date=r["lesson_date"],
-                day_of_week=r["day_of_week"],
-                lesson_number=r["lesson_number"],
-                subject=r["subject"],
-                teacher=r["teacher"],
-                room=r["room"],
-                start_time=r["start_time"],
-                end_time=r["end_time"],
-                lesson_kind=r.get("lesson_kind") or "",
-                contingent_label=r.get("contingent_label") or "",
+    existing_rows = list(
+        await session.scalars(
+            select(Schedule).where(
+                Schedule.study_group_id == sg.id,
+                Schedule.lesson_date >= rng_lo,
+                Schedule.lesson_date <= rng_hi,
             )
         )
+    )
+    existing_by_key: dict[tuple, Schedule] = {}
+    for s in existing_rows:
+        ekey = (
+            s.lesson_date,
+            (s.start_time or ""),
+            s.subject or "",
+            s.teacher or "",
+            s.lesson_kind or "",
+            s.contingent_label or "",
+        )
+        existing_by_key[ekey] = s
+
+    new_keys: set[tuple] = set()
+    for r in deduped:
+        key = (
+            r["lesson_date"],
+            r["start_time"],
+            r["subject"],
+            (r.get("teacher") or ""),
+            (r.get("lesson_kind") or ""),
+            (r.get("contingent_label") or ""),
+        )
+        new_keys.add(key)
+        existing = existing_by_key.get(key)
+        if existing is not None:
+            existing.group_name = sg.name
+            existing.day_of_week = r["day_of_week"]
+            existing.lesson_number = r["lesson_number"]
+            existing.room = r.get("room") or ""
+            existing.end_time = r["end_time"]
+        else:
+            session.add(
+                Schedule(
+                    study_group_id=sg.id,
+                    group_name=sg.name,
+                    lesson_date=r["lesson_date"],
+                    day_of_week=r["day_of_week"],
+                    lesson_number=r["lesson_number"],
+                    subject=r["subject"],
+                    teacher=r.get("teacher") or "",
+                    room=r.get("room") or "",
+                    start_time=r["start_time"],
+                    end_time=r["end_time"],
+                    lesson_kind=r.get("lesson_kind") or "",
+                    contingent_label=r.get("contingent_label") or "",
+                )
+            )
+
+    if not used_fallback:
+        # HTML fallback заведомо неполный (только сегодня) — не удаляем по нему.
+        stale_ids = [s.id for k, s in existing_by_key.items() if k not in new_keys]
+        if stale_ids:
+            await session.execute(
+                delete(Schedule).where(Schedule.id.in_(stale_ids))
+            )
+
     await session.flush()
     subs = await distinct_schedule_subjects(session, sg.id)
     await sync_group_semester_catalog(session, sg, subs)
