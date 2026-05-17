@@ -4,6 +4,7 @@ import json
 from datetime import date, datetime
 from enum import Enum
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -174,7 +175,8 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    telegram_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    # Telegram-ID давно вышел за INT4 (на Postgres INTEGER = INT4, переполнение для новых юзеров).
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), default="")
     group_name: Mapped[str] = mapped_column(String(128), default="")
     study_group_id: Mapped[int | None] = mapped_column(
@@ -299,7 +301,7 @@ class SiteGrade(Base):
     )
     org_student_id: Mapped[int] = mapped_column(Integer)
     student_name: Mapped[str] = mapped_column(String(255), default="")
-    telegram_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     discipline: Mapped[str] = mapped_column(String(512))
     attendance_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_score: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -429,10 +431,10 @@ class FSMStateRow(Base):
 
     __tablename__ = "aiogram_fsm"
 
-    bot_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    chat_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    thread_id: Mapped[int] = mapped_column(Integer, primary_key=True, default=0)
+    bot_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    thread_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=0)
     business_connection_id: Mapped[str] = mapped_column(
         String(64), primary_key=True, default=""
     )
@@ -739,7 +741,34 @@ async def init_db() -> None:
             await conn.run_sync(_migrate_sqlite_study_group_org_cookies)
             await conn.run_sync(_migrate_sqlite_site_grades_marks_json)
             await conn.run_sync(_migrate_sqlite_deadline_homework_id)
+        elif dialect in ("postgresql", "postgres"):
+            await conn.run_sync(_migrate_postgres_bigint_telegram_ids)
     await _encrypt_legacy_secrets_at_rest()
+
+
+def _migrate_postgres_bigint_telegram_ids(sync_conn) -> None:
+    """Расширяет колонки Telegram-ID до BIGINT на Postgres.
+    Изначально модель использовала Integer (= INT4 на Postgres), что перестало
+    помещать ID новых пользователей Telegram (давно > 2^31). Идемпотентно:
+    повторный ALTER на BIGINT не вызывает ошибки."""
+    statements = [
+        # Внутренние таблицы бота
+        'ALTER TABLE IF EXISTS users ALTER COLUMN telegram_id TYPE BIGINT',
+        'ALTER TABLE IF EXISTS site_grades ALTER COLUMN telegram_id TYPE BIGINT',
+        # FSM-хранилище (там тоже user_id / chat_id / bot_id)
+        'ALTER TABLE IF EXISTS aiogram_fsm ALTER COLUMN bot_id TYPE BIGINT',
+        'ALTER TABLE IF EXISTS aiogram_fsm ALTER COLUMN chat_id TYPE BIGINT',
+        'ALTER TABLE IF EXISTS aiogram_fsm ALTER COLUMN user_id TYPE BIGINT',
+        'ALTER TABLE IF EXISTS aiogram_fsm ALTER COLUMN thread_id TYPE BIGINT',
+    ]
+    for stmt in statements:
+        try:
+            sync_conn.execute(text(stmt))
+        except Exception as ex:  # noqa: BLE001
+            # ALTER упадёт только если колонка уже BIGINT — это нормально.
+            logger_msg = f"[postgres_bigint_migration] {stmt} → {ex.__class__.__name__}: {ex}"
+            import logging as _logging
+            _logging.getLogger(__name__).info(logger_msg)
 
 
 async def _encrypt_legacy_secrets_at_rest() -> None:
