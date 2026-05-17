@@ -1,4 +1,5 @@
 import html
+import logging
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart, StateFilter
@@ -16,6 +17,7 @@ from utils.birthday_helpers import parse_birthday_text
 from utils.group_context import get_study_group
 from utils.user_roles import effective_is_elder
 
+logger = logging.getLogger(__name__)
 router = Router(name="common")
 
 CHANGELOG = [
@@ -118,33 +120,58 @@ async def cmd_start(message: Message, session, state: FSMContext) -> None:
     uname = message.from_user.username
     role = UserRole.elder if config.is_elder(uid, uname) else UserRole.student
 
-    db_user = await session.scalar(select(User).where(User.telegram_id == uid))
-    is_new = db_user is None
-
-    if is_new:
-        db_user = User(telegram_id=uid, full_name="", group_name="", role=role)
-        session.add(db_user)
-        await session.flush()
+    try:
         db_user = await session.scalar(select(User).where(User.telegram_id == uid))
-    else:
-        if role == UserRole.elder:
-            db_user.role = UserRole.elder
+        is_new = db_user is None
+
+        if is_new:
+            db_user = User(telegram_id=uid, full_name="", group_name="", role=role)
+            session.add(db_user)
             await session.flush()
-
-    if _needs_full_name(db_user):
-        await state.set_state(OnboardingStates.full_name)
-        await message.answer(_GREETING, parse_mode="HTML")
-        return
-
-    if _needs_birthday(db_user):
-        await state.set_state(OnboardingStates.birthday)
+            db_user = await session.scalar(select(User).where(User.telegram_id == uid))
+        else:
+            if role == UserRole.elder:
+                db_user.role = UserRole.elder
+                await session.flush()
+    except Exception as ex:
+        # До этой правки exception тут проглатывался DbSessionMiddleware (rollback + raise),
+        # юзер видел тишину. Теперь хотя бы пишем в лог и отвечаем явно.
+        logger.exception(
+            "cmd_start: ошибка регистрации пользователя tg_id=%s username=%s: %s",
+            uid, uname, ex,
+        )
         await message.answer(
-            _WELCOME_BACK_NO_BIRTHDAY.format(name=_esc(db_user.full_name)),
+            "⚠️ Не удалось завершить регистрацию. Это серверная ошибка — попроси "
+            "разработчика посмотреть логи. Текст ошибки для отладки:\n"
+            f"<code>{_esc(ex.__class__.__name__)}: {_esc(str(ex))[:300]}</code>",
             parse_mode="HTML",
         )
         return
 
-    await send_main_welcome(message, session, state, db_user)
+    try:
+        if _needs_full_name(db_user):
+            await state.set_state(OnboardingStates.full_name)
+            await message.answer(_GREETING, parse_mode="HTML")
+            return
+
+        if _needs_birthday(db_user):
+            await state.set_state(OnboardingStates.birthday)
+            await message.answer(
+                _WELCOME_BACK_NO_BIRTHDAY.format(name=_esc(db_user.full_name)),
+                parse_mode="HTML",
+            )
+            return
+
+        await send_main_welcome(message, session, state, db_user)
+    except Exception as ex:
+        logger.exception(
+            "cmd_start: ошибка после регистрации tg_id=%s: %s", uid, ex
+        )
+        await message.answer(
+            "⚠️ Ошибка при открытии меню. Логи:\n"
+            f"<code>{_esc(ex.__class__.__name__)}: {_esc(str(ex))[:300]}</code>",
+            parse_mode="HTML",
+        )
 
 
 # ──────────────────────────────────────────────────────

@@ -747,28 +747,57 @@ async def init_db() -> None:
 
 
 def _migrate_postgres_bigint_telegram_ids(sync_conn) -> None:
-    """Расширяет колонки Telegram-ID до BIGINT на Postgres.
-    Изначально модель использовала Integer (= INT4 на Postgres), что перестало
-    помещать ID новых пользователей Telegram (давно > 2^31). Идемпотентно:
-    повторный ALTER на BIGINT не вызывает ошибки."""
-    statements = [
-        # Внутренние таблицы бота
-        'ALTER TABLE IF EXISTS users ALTER COLUMN telegram_id TYPE BIGINT',
-        'ALTER TABLE IF EXISTS site_grades ALTER COLUMN telegram_id TYPE BIGINT',
-        # FSM-хранилище (там тоже user_id / chat_id / bot_id)
-        'ALTER TABLE IF EXISTS aiogram_fsm ALTER COLUMN bot_id TYPE BIGINT',
-        'ALTER TABLE IF EXISTS aiogram_fsm ALTER COLUMN chat_id TYPE BIGINT',
-        'ALTER TABLE IF EXISTS aiogram_fsm ALTER COLUMN user_id TYPE BIGINT',
-        'ALTER TABLE IF EXISTS aiogram_fsm ALTER COLUMN thread_id TYPE BIGINT',
+    """Расширяет колонки Telegram-ID до BIGINT на Postgres, если они ещё INT4.
+
+    Telegram-ID давно превышает 2^31, а изначально модель использовала Integer
+    (= INT4 на Postgres), из-за чего INSERT новых пользователей падал с
+    переполнением. Безопасно при повторных запусках: пропускает уже BIGINT.
+
+    Реализация через ``information_schema``: сначала смотрим текущий тип,
+    ALTER выполняем только когда действительно надо. Это критично, потому что
+    в Postgres любая упавшая команда в транзакции переводит её в ``aborted``,
+    и все последующие statements тихо игнорируются. Идемпотентная проверка
+    позволяет обойтись без savepoints и не зависит от порядка ALTER.
+    """
+    import logging as _logging
+
+    log = _logging.getLogger(__name__)
+
+    targets = [
+        ("users", "telegram_id"),
+        ("site_grades", "telegram_id"),
+        ("aiogram_fsm", "bot_id"),
+        ("aiogram_fsm", "chat_id"),
+        ("aiogram_fsm", "user_id"),
+        ("aiogram_fsm", "thread_id"),
     ]
-    for stmt in statements:
+
+    for table, column in targets:
+        row = sync_conn.execute(
+            text(
+                "SELECT data_type FROM information_schema.columns "
+                "WHERE table_schema = current_schema() "
+                "AND table_name = :t AND column_name = :c"
+            ),
+            {"t": table, "c": column},
+        ).fetchone()
+        if row is None:
+            # Колонки нет (или таблицы) — пропускаем; create_all создаст её с BIGINT по модели.
+            continue
+        current_type = (row[0] or "").lower()
+        if current_type == "bigint":
+            continue
         try:
-            sync_conn.execute(text(stmt))
+            sync_conn.execute(
+                text(f'ALTER TABLE "{table}" ALTER COLUMN "{column}" TYPE BIGINT')
+            )
+            log.info("[bigint_migration] %s.%s: %s -> bigint", table, column, current_type)
         except Exception as ex:  # noqa: BLE001
-            # ALTER упадёт только если колонка уже BIGINT — это нормально.
-            logger_msg = f"[postgres_bigint_migration] {stmt} → {ex.__class__.__name__}: {ex}"
-            import logging as _logging
-            _logging.getLogger(__name__).info(logger_msg)
+            log.warning(
+                "[bigint_migration] %s.%s: ALTER FAILED (%s): %s",
+                table, column, ex.__class__.__name__, ex,
+            )
+            raise  # пускай init_db упадёт громко, иначе симптомы те же: /start не отвечает
 
 
 async def _encrypt_legacy_secrets_at_rest() -> None:
