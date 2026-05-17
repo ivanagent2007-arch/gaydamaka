@@ -159,6 +159,35 @@ h1 {
   overflow-x: hidden;
 }
 
+/* ───────── Семантические модификаторы карточек ─────────
+   Цветная полоска слева сразу подсказывает «функцию» секции:
+   • Зелёная — карточка-данные: список, ведомость, прикреплённое;
+   • Синяя   — карточка-форма: ввод данных пользователем (староста);
+   • Жёлтая  — карточка-предупреждение/инфо.
+   Применяется через class="card card--data" и т.п. */
+.card--data {
+  border-left: 3px solid var(--brand-green);
+}
+
+.card--form {
+  border-left: 3px solid var(--brand-blue);
+}
+
+.card--info {
+  border-left: 3px solid var(--warn-fg);
+}
+
+/* Сразу прокрашиваем существующие элементы формы (без правок HTML) */
+.card.elder-hw-panel,
+.card.profile-elder,
+.card#elderReportWrap {
+  border-left: 3px solid var(--brand-blue);
+}
+
+.deadline-card {
+  border-left: 3px solid var(--brand-green);
+}
+
 .card > *,
 .card label,
 .card p,
