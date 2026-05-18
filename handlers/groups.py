@@ -15,6 +15,7 @@ from handlers.states import CreateGroupStates, JoinCodeStates
 from keyboards.reply import main_menu_kb
 from utils.group_context import get_study_group, ruz_search_for_group
 from utils.group_email_imap import is_valid_email
+from utils.group_roster import user_leave_group
 from utils.user_roles import effective_is_elder
 
 RUZ_SOURCES: dict[str, str] = {
@@ -138,15 +139,15 @@ async def cmd_leave_group(
     if not db_user or not db_user.study_group_id:
         await message.answer("Ты ни в какой группе не состоишь.")
         return
-    if is_elder:
+    ok, msg = await user_leave_group(session, db_user)
+    if not ok:
+        # Староста с участниками: msg уже содержит подсказку «сначала передай роль».
+        # Передача роли — в мини-приложении → «Состав группы».
         await message.answer(
-            "Староста не может выйти из группы одной командой "
-            "(иначе потеряются права на расписание этой группы). "
-            "Попроси админа бота сбросить привязку в базе."
+            msg + "\n\nПередать роль можно в мини-приложении → «Состав группы»."
         )
         return
-    db_user.study_group_id = None
-    db_user.group_name = ""
+    await session.commit()
     await message.answer(
         "Ты вышел из группы. Выбери снова: /groups",
         reply_markup=main_menu_kb(False, False),

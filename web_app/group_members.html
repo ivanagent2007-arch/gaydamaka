@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, maximum-scale=1"
     />
     <title>Состав группы</title>
-    <link rel="stylesheet" href="styles.css?v=5" />
+    <link rel="stylesheet" href="styles.css?v=6" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -17,9 +17,15 @@
     </header>
     <div id="banner"></div>
     <div id="list" class="card card--data list-in-card">Загрузка…</div>
+    <div id="leaveCard" class="card card--form" hidden>
+      <h2 class="block-title">Выйти из группы</h2>
+      <p id="leaveDesc" class="block-desc muted"></p>
+      <button type="button" id="leaveBtn">Выйти из группы</button>
+      <p id="leaveMsg" class="muted" style="margin: 8px 0 0; min-height: 1.2em"></p>
+    </div>
     <p id="err" class="err"></p>
-    <script src="api.js?v=5"></script>
-    <script src="nav.js?v=5"></script>
+    <script src="api.js?v=6"></script>
+    <script src="nav.js?v=6"></script>
     <script>
       function escapeHtml(s) {
         return String(s)
@@ -81,9 +87,52 @@
         }
       }
 
+      async function transferElder(id, name) {
+        if (
+          !confirm(
+            "Передать роль старосты пользователю «" +
+              name +
+              "»? Ты станешь обычным студентом, он — старостой. Действие необратимо без участия нового старосты."
+          )
+        ) {
+          return;
+        }
+        try {
+          document.getElementById("err").textContent = "";
+          await SA.apiPost("/api/group/transfer_elder", { user_id: id });
+          await load();
+        } catch (e) {
+          document.getElementById("err").textContent = String(e);
+        }
+      }
+
+      async function leaveGroup() {
+        if (
+          !confirm(
+            "Выйти из группы? Ты потеряешь доступ к расписанию, дедлайнам и материалам. Снова войти можно по коду от старосты."
+          )
+        ) {
+          return;
+        }
+        var msgEl = document.getElementById("leaveMsg");
+        msgEl.textContent = "";
+        document.getElementById("err").textContent = "";
+        try {
+          await SA.apiPost("/api/group/leave", {});
+          msgEl.textContent = "Ты вышел из группы.";
+          await load();
+        } catch (e) {
+          // Сервер вернёт 400 с конкретным текстом, например «сначала передай роль».
+          msgEl.textContent = String(e);
+        }
+      }
+
       async function load() {
         var el = document.getElementById("list");
         var hint = document.getElementById("hint");
+        var leaveCard = document.getElementById("leaveCard");
+        // На каждом refresh скрываем «Выйти» — покажем заново, если юзер в группе.
+        leaveCard.hidden = true;
         try {
           var me = await SA.apiGet("/api/me");
           var data = await SA.apiGet("/api/group/members");
@@ -130,10 +179,23 @@
             var canAppointDeputy =
               chief && m.role === "student" && m.id !== me.db_user_id;
             var canDemoteDeputy = chief && m.role === "deputy_elder";
+            // Староста может передать роль любому НЕ-себе члену группы (зам и студент).
+            var canTransferElder =
+              chief && m.role !== "elder" && m.id !== me.db_user_id;
 
-            if (canKick || canAppointDeputy || canDemoteDeputy) {
+            if (canKick || canAppointDeputy || canDemoteDeputy || canTransferElder) {
               var actions = document.createElement("div");
               actions.className = "member-actions";
+              if (canTransferElder) {
+                var trBtn = document.createElement("button");
+                trBtn.type = "button";
+                trBtn.className = "secondary member-deputy-btn";
+                trBtn.textContent = "Передать старосту";
+                trBtn.addEventListener("click", function () {
+                  transferElder(m.id, m.full_name || "");
+                });
+                actions.appendChild(trBtn);
+              }
               if (canKick) {
                 var kickBtn = document.createElement("button");
                 kickBtn.type = "button";
@@ -168,6 +230,38 @@
             }
             el.appendChild(row);
           });
+
+          // Карточка «Выйти из группы» — внизу страницы, для всех у кого есть группа.
+          var leaveCard = document.getElementById("leaveCard");
+          var leaveDesc = document.getElementById("leaveDesc");
+          var leaveBtn = document.getElementById("leaveBtn");
+          var leaveMsg = document.getElementById("leaveMsg");
+          leaveCard.hidden = false;
+          leaveMsg.textContent = "";
+          var hasOtherMembers = data.items.some(function (m) {
+            return m.id !== me.db_user_id;
+          });
+          if (me.is_chief_elder && hasOtherMembers) {
+            leaveDesc.textContent =
+              "Ты староста. Чтобы выйти из группы, сначала передай роль старосты другому участнику (кнопка «Передать старосту» в его строке выше). После передачи ты станешь студентом и сможешь выйти.";
+            leaveBtn.disabled = true;
+            leaveBtn.textContent = "Сначала передайте роль старосты";
+          } else if (me.is_chief_elder) {
+            // Староста и в группе один — выход равносилен распаду группы.
+            leaveDesc.textContent =
+              "Ты единственный в группе. После выхода группа останется без старосты — снова войти по тому же коду не получится.";
+            leaveBtn.disabled = false;
+            leaveBtn.textContent = "Выйти из группы";
+          } else {
+            leaveDesc.textContent =
+              "После выхода ты потеряешь доступ к материалам этой группы. Снова войти можно по коду от старосты.";
+            leaveBtn.disabled = false;
+            leaveBtn.textContent = "Выйти из группы";
+          }
+          if (!leaveBtn._wired) {
+            leaveBtn.addEventListener("click", leaveGroup);
+            leaveBtn._wired = true;
+          }
         } catch (e) {
           document.getElementById("err").textContent = String(e);
           el.textContent = "";

@@ -42,6 +42,8 @@ from utils.group_roster import (
     elder_remove_student,
     get_group_member_rows,
     set_group_deputy,
+    transfer_elder_role,
+    user_leave_group,
 )
 from utils.homework_deadline import deadline_for_homework
 from utils.group_email_attachments_store import (
@@ -473,6 +475,50 @@ async def api_group_deputy(request: web.Request) -> web.Response:
         if not chief:
             raise web.HTTPForbidden(text="user not found")
         ok, err = await set_group_deputy(session, chief, target_id)
+        if not ok:
+            raise web.HTTPBadRequest(text=err)
+        await session.commit()
+    return web.json_response({"ok": True})
+
+
+async def api_group_transfer_elder(request: web.Request) -> web.Response:
+    """Староста передаёт роль другому участнику группы."""
+    u = await _auth_user(request)
+    if not _is_chief_elder_web(u):
+        raise web.HTTPForbidden(text="only chief elder")
+    if not u["study_group_id"]:
+        raise web.HTTPBadRequest(text="no study group")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, TypeError, ValueError):
+        raise web.HTTPBadRequest(text="invalid json")
+    try:
+        target_id = int(body.get("user_id", 0))
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(text="bad user_id")
+    if target_id <= 0:
+        raise web.HTTPBadRequest(text="user_id required")
+    async with async_session_maker() as session:
+        actor = await session.get(User, u["id"])
+        if not actor:
+            raise web.HTTPForbidden(text="user not found")
+        ok, err = await transfer_elder_role(session, actor, target_id)
+        if not ok:
+            raise web.HTTPBadRequest(text=err)
+        await session.commit()
+    return web.json_response({"ok": True})
+
+
+async def api_group_leave(request: web.Request) -> web.Response:
+    """Любой участник выходит из своей группы. Староста — только после передачи роли."""
+    u = await _auth_user(request)
+    if not u["study_group_id"]:
+        raise web.HTTPBadRequest(text="no study group")
+    async with async_session_maker() as session:
+        actor = await session.get(User, u["id"])
+        if not actor:
+            raise web.HTTPForbidden(text="user not found")
+        ok, err = await user_leave_group(session, actor)
         if not ok:
             raise web.HTTPBadRequest(text=err)
         await session.commit()
@@ -1291,6 +1337,8 @@ def create_app() -> web.Application:
     app.router.add_get("/api/group/members", api_group_members)
     app.router.add_post("/api/group/kick", api_group_kick)
     app.router.add_post("/api/group/deputy", api_group_deputy)
+    app.router.add_post("/api/group/transfer_elder", api_group_transfer_elder)
+    app.router.add_post("/api/group/leave", api_group_leave)
     app.router.add_get("/api/deadlines", api_deadlines)
     app.router.add_post("/api/deadlines", api_deadlines_post)
     app.router.add_get("/api/attendance", api_attendance_get)
