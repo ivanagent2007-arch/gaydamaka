@@ -17,6 +17,7 @@ from aiogram.fsm.storage.base import BaseStorage, StorageKey, StateType
 from sqlalchemy import delete, select
 
 from database import FSMStateRow, async_session_maker
+from utils.db_context import commit_outer_session_if_any
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,9 @@ class SqlAlchemyStorage(BaseStorage):
         )
 
     async def set_state(self, key: StorageKey, state: StateType = None) -> None:
+        # На SQLite outer-сессия middleware могла держать write-lock — освободим
+        # его до открытия своей сессии, иначе self-deadlock.
+        await commit_outer_session_if_any()
         state_str = _state_to_str(state)
         async with async_session_maker() as session:
             row = await self._load(session, key)
@@ -97,11 +101,14 @@ class SqlAlchemyStorage(BaseStorage):
             await session.commit()
 
     async def get_state(self, key: StorageKey) -> str | None:
+        # get_state — это SELECT, на SQLite в WAL-режиме читатели не блокируются
+        # writer'ом, так что коммит outer-сессии тут не нужен.
         async with async_session_maker() as session:
             row = await self._load(session, key)
             return row.state if row else None
 
     async def set_data(self, key: StorageKey, data: Mapping[str, Any]) -> None:
+        await commit_outer_session_if_any()
         payload = json.dumps(dict(data), ensure_ascii=False)
         async with async_session_maker() as session:
             row = await self._load(session, key)
