@@ -45,6 +45,9 @@ _RUZ_REFRESH_PAST = int(os.getenv("RUZ_SCHEDULE_REFRESH_PAST_DAYS", "14").strip(
 _RUZ_REFRESH_FUTURE = int(os.getenv("RUZ_SCHEDULE_REFRESH_FUTURE_DAYS", "45").strip() or "45")
 RUZ_SCHEDULE_REFRESH_PAST_DAYS = max(0, min(_RUZ_REFRESH_PAST, 90))
 RUZ_SCHEDULE_REFRESH_FUTURE_DAYS = max(7, min(_RUZ_REFRESH_FUTURE, 180))
+# Жёсткий таймаут на одну группу в фоновом синке — чтобы зависшая РУЗ не подвисала job полностью.
+_RUZ_REFRESH_GROUP_TIMEOUT = float(os.getenv("RUZ_SCHEDULE_REFRESH_GROUP_TIMEOUT_S", "120") or "120")
+RUZ_SCHEDULE_REFRESH_GROUP_TIMEOUT_S = max(20.0, min(_RUZ_REFRESH_GROUP_TIMEOUT, 600.0))
 
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "0.0.0.0")
 WEBAPP_PORT = int(os.getenv("WEBAPP_PORT", "8080"))

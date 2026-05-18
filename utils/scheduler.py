@@ -203,12 +203,22 @@ async def poll_group_mail(bot: Bot) -> None:
 async def refresh_all_schedules() -> None:
     """Фоновая сверка расписания каждой группы с РУЗ: подтягивает смены аудиторий, отмены,
     замены преподавателей без участия старосты. Окно — узкая окрестность сегодня
-    (RUZ_SCHEDULE_REFRESH_PAST_DAYS … FUTURE_DAYS), чтобы один проход был быстрым."""
-    from handlers.schedule import sync_study_group_schedule_for_range  # ленивый импорт: handlers зависит от utils
+    (RUZ_SCHEDULE_REFRESH_PAST_DAYS … FUTURE_DAYS), чтобы один проход был быстрым.
+
+    На каждую группу — жёсткий таймаут (RUZ_SCHEDULE_REFRESH_GROUP_TIMEOUT_S, по умолчанию
+    120 сек). Без него одна зависшая группа в РУЗ заблокировала бы весь job (а APScheduler
+    с max_instances=1 пропустил бы все последующие циклы — расписание не обновлялось бы).
+    """
+    import asyncio as _asyncio
+
+    from handlers.schedule import sync_study_group_schedule_for_range  # ленивый импорт
 
     today = date.today()
     rng_lo = today - timedelta(days=config.RUZ_SCHEDULE_REFRESH_PAST_DAYS)
     rng_hi = today + timedelta(days=config.RUZ_SCHEDULE_REFRESH_FUTURE_DAYS)
+    per_group_timeout = float(
+        getattr(config, "RUZ_SCHEDULE_REFRESH_GROUP_TIMEOUT_S", 120)
+    )
     async with async_session_maker() as session:
         group_ids = list(
             await session.scalars(
@@ -224,8 +234,17 @@ async def refresh_all_schedules() -> None:
                 sg = await session.get(StudyGroup, gid)
                 if sg is None:
                     continue
-                await sync_study_group_schedule_for_range(session, sg, rng_lo, rng_hi)
+                await _asyncio.wait_for(
+                    sync_study_group_schedule_for_range(session, sg, rng_lo, rng_hi),
+                    timeout=per_group_timeout,
+                )
                 await session.commit()
+            except _asyncio.TimeoutError:
+                await session.rollback()
+                logger.warning(
+                    "refresh_all_schedules: РУЗ не ответил за %ss, group_id=%s — пропускаем до следующего цикла",
+                    per_group_timeout, gid,
+                )
             except Exception:
                 await session.rollback()
                 logger.exception("refresh_all_schedules: group_id=%s", gid)
