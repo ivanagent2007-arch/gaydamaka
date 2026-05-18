@@ -375,7 +375,9 @@ async def _finish_create_group(
         imap_password=pwd,
     )
     session.add(sg)
-    await session.flush()
+    # commit, а не flush: освобождаем SQLite write-lock до state.clear() ниже,
+    # иначе FSM-сессия зависает в ожидании этого же лока (self-deadlock).
+    await session.commit()
 
     if corp:
         session.add(GroupEmailPollState(study_group_id=sg.id, last_uid=0, bootstrapped=False))

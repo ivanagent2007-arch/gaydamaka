@@ -52,7 +52,9 @@ async def birthday_entered(message: Message, session, state: FSMContext, db_user
     db_user.birthday_month = month
     db_user.birthday_day = day
     db_user.birth_year = year
-    await session.flush()
+    # commit, а не flush: send_main_welcome ниже зовёт state.clear(), а FSM-сессии
+    # нужна свободная write-lock — иначе self-deadlock на SQLite.
+    await session.commit()
     await message.answer("Записал.")
     db_user = await session.get(User, db_user.id)
     await send_main_welcome(message, session, state, db_user)

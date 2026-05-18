@@ -290,7 +290,9 @@ async def _save_hw(message: Message, state: FSMContext, session, paths: list[str
         file_paths=json.dumps(paths, ensure_ascii=False),
     )
     session.add(hw)
-    await session.flush()
+    # commit (не flush): state.clear() ниже использует отдельную FSM-сессию,
+    # которая зависнет в ожидании SQLite write-lock, если он не освобождён здесь.
+    await session.commit()
     sch = await session.get(Schedule, sid)
     creator = await session.scalar(
         select(User).where(User.telegram_id == message.from_user.id)
