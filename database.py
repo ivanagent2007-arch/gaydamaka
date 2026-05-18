@@ -443,8 +443,33 @@ class FSMStateRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-engine = create_async_engine(config.DATABASE_URL, echo=False)
+_engine_kwargs: dict = {"echo": False}
+if config.DATABASE_URL.startswith("sqlite"):
+    # SQLite по умолчанию ждёт лока всего 5 секунд (потом OperationalError: database is locked).
+    # Бот делает несколько одновременных запросов на каждый /start (DbSessionMiddleware +
+    # отдельная FSM-сессия). На 30 секунд хватит даже долгих миграций.
+    _engine_kwargs["connect_args"] = {"timeout": 30}
+
+engine = create_async_engine(config.DATABASE_URL, **_engine_kwargs)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+
+if config.DATABASE_URL.startswith("sqlite"):
+    # WAL-режим: позволяет одному подключению писать, пока другие читают — без этого
+    # выдача FSM-состояния параллельно с записью в users почти всегда даёт
+    # «database is locked». synchronous=NORMAL ускоряет коммиты при WAL.
+    from sqlalchemy import event as _sa_event
+
+    @_sa_event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, _connection_record):  # noqa: ANN001
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
 
 
 def _sqlite_columns(sync_conn, table: str) -> set[str]:

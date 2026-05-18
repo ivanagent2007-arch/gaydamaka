@@ -13,6 +13,7 @@ from handlers.states import OnboardingStates
 from keyboards.inline import onboarding_kb
 from keyboards.reply import main_menu_kb
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from utils.birthday_helpers import parse_birthday_text
 from utils.group_context import get_study_group
 from utils.user_roles import effective_is_elder
@@ -127,8 +128,21 @@ async def cmd_start(message: Message, session, state: FSMContext) -> None:
         if is_new:
             db_user = User(telegram_id=uid, full_name="", group_name="", role=role)
             session.add(db_user)
-            await session.flush()
-            db_user = await session.scalar(select(User).where(User.telegram_id == uid))
+            try:
+                await session.flush()
+            except IntegrityError:
+                # Юзер мог остаться от упавшей предыдущей попытки /start (старый баг с
+                # «database is locked» в SQLite). Откатываемся и перечитываем существующего.
+                await session.rollback()
+                db_user = await session.scalar(
+                    select(User).where(User.telegram_id == uid)
+                )
+                if db_user is None:
+                    raise  # должно было быть — что-то реально не так
+            else:
+                db_user = await session.scalar(
+                    select(User).where(User.telegram_id == uid)
+                )
         else:
             if role == UserRole.elder:
                 db_user.role = UserRole.elder
