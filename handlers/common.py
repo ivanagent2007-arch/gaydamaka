@@ -129,10 +129,12 @@ async def cmd_start(message: Message, session, state: FSMContext) -> None:
             db_user = User(telegram_id=uid, full_name="", group_name="", role=role)
             session.add(db_user)
             try:
-                await session.flush()
+                # Сразу commit, а не flush: иначе на SQLite write-lock держится до конца
+                # хендлера, а внутри хендлера ниже state.set_state() из FSM-storage
+                # пробует тот же lock в отдельной сессии и ловит «database is locked».
+                await session.commit()
             except IntegrityError:
-                # Юзер мог остаться от упавшей предыдущей попытки /start (старый баг с
-                # «database is locked» в SQLite). Откатываемся и перечитываем существующего.
+                # Юзер мог остаться от упавшей предыдущей попытки /start.
                 await session.rollback()
                 db_user = await session.scalar(
                     select(User).where(User.telegram_id == uid)
@@ -146,7 +148,7 @@ async def cmd_start(message: Message, session, state: FSMContext) -> None:
         else:
             if role == UserRole.elder:
                 db_user.role = UserRole.elder
-                await session.flush()
+                await session.commit()
     except Exception as ex:
         # До этой правки exception тут проглатывался DbSessionMiddleware (rollback + raise),
         # юзер видел тишину. Теперь хотя бы пишем в лог и отвечаем явно.
@@ -211,30 +213,42 @@ async def onboard_full_name(message: Message, session, state: FSMContext) -> Non
         await message.answer("Слишком длинное — сократи до 200 символов.")
         return
 
-    db_user = await session.scalar(select(User).where(User.telegram_id == uid))
-    if not db_user:
-        await state.clear()
-        await message.answer("Что-то пошло не так. Попробуй /start ещё раз.")
-        return
+    try:
+        db_user = await session.scalar(select(User).where(User.telegram_id == uid))
+        if not db_user:
+            await state.clear()
+            await message.answer("Что-то пошло не так. Попробуй /start ещё раз.")
+            return
 
-    db_user.full_name = raw
-    await session.flush()
+        db_user.full_name = raw
+        # commit, а не flush: освобождаем SQLite write-lock до того, как FSM-storage
+        # откроет вторую сессию для UPDATE aiogram_fsm.
+        await session.commit()
 
-    if _needs_birthday(db_user):
-        await state.set_state(OnboardingStates.birthday)
+        if _needs_birthday(db_user):
+            await state.set_state(OnboardingStates.birthday)
+            await message.answer(
+                f"Приятно познакомиться, <b>{_esc(raw)}</b>!\n"
+                "\n"
+                "Теперь укажи свой <b>день рождения</b> — я буду поздравлять тебя\n"
+                "и напоминать одногруппникам.\n"
+                "\n"
+                "Формат: <b>ДД.ММ</b> (например <code>15.03</code>)\n"
+                "или <b>ДД.ММ.ГГГГ</b> (например <code>15.03.2003</code>).",
+                parse_mode="HTML",
+            )
+            return
+
+        await _finish_onboarding(message, session, state, db_user)
+    except Exception as ex:
+        logger.exception(
+            "onboard_full_name: ошибка tg_id=%s name=%r: %s", uid, raw, ex
+        )
         await message.answer(
-            f"Приятно познакомиться, <b>{_esc(raw)}</b>!\n"
-            "\n"
-            "Теперь укажи свой <b>день рождения</b> — я буду поздравлять тебя\n"
-            "и напоминать одногруппникам.\n"
-            "\n"
-            "Формат: <b>ДД.ММ</b> (например <code>15.03</code>)\n"
-            "или <b>ДД.ММ.ГГГГ</b> (например <code>15.03.2003</code>).",
+            "⚠️ Ошибка при сохранении имени. Текст для отладки:\n"
+            f"<code>{_esc(ex.__class__.__name__)}: {_esc(str(ex))[:300]}</code>",
             parse_mode="HTML",
         )
-        return
-
-    await _finish_onboarding(message, session, state, db_user)
 
 
 @router.message(OnboardingStates.full_name, ~F.text)
@@ -265,18 +279,30 @@ async def onboard_birthday(message: Message, session, state: FSMContext) -> None
         return
 
     month, day, year = parsed
-    db_user = await session.scalar(select(User).where(User.telegram_id == uid))
-    if not db_user:
-        await state.clear()
-        await message.answer("Что-то пошло не так. Попробуй /start ещё раз.")
-        return
+    try:
+        db_user = await session.scalar(select(User).where(User.telegram_id == uid))
+        if not db_user:
+            await state.clear()
+            await message.answer("Что-то пошло не так. Попробуй /start ещё раз.")
+            return
 
-    db_user.birthday_month = month
-    db_user.birthday_day = day
-    db_user.birth_year = year
-    await session.flush()
+        db_user.birthday_month = month
+        db_user.birthday_day = day
+        db_user.birth_year = year
+        # commit перед FSM-операцией (state.clear внутри _finish_onboarding).
+        await session.commit()
 
-    await _finish_onboarding(message, session, state, db_user)
+        await _finish_onboarding(message, session, state, db_user)
+    except Exception as ex:
+        logger.exception(
+            "onboard_birthday: ошибка tg_id=%s bday=%s.%s.%s: %s",
+            uid, day, month, year, ex,
+        )
+        await message.answer(
+            "⚠️ Ошибка при сохранении даты рождения. Текст для отладки:\n"
+            f"<code>{_esc(ex.__class__.__name__)}: {_esc(str(ex))[:300]}</code>",
+            parse_mode="HTML",
+        )
 
 
 @router.message(OnboardingStates.birthday, ~F.text)
