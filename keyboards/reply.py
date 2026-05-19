@@ -1,5 +1,4 @@
-import config
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 
 def schedule_submenu_kb() -> ReplyKeyboardMarkup:
@@ -20,7 +19,6 @@ def schedule_submenu_kb() -> ReplyKeyboardMarkup:
 
 
 def main_menu_kb(is_elder: bool, has_group: bool = True) -> ReplyKeyboardMarkup:
-    webapp_url = f"{config.WEBAPP_PUBLIC_URL.rstrip('/')}/index.html"
     rows: list[list[KeyboardButton]] = []
     if not has_group:
         rows.append([KeyboardButton(text="Ввести код группы")])
@@ -33,15 +31,13 @@ def main_menu_kb(is_elder: bool, has_group: bool = True) -> ReplyKeyboardMarkup:
                 KeyboardButton(text="Почта"),
             ]
         )
+    # Кнопку «Мини-приложение» из главной reply-клавиатуры убрали:
+    # Telegram дублировал её зелёной пилюлей над полем ввода. Мини-приложение
+    # теперь открывается командой /webapp (отправляет одноразовую клавиатуру
+    # с кнопкой «Открыть приложение») — этого достаточно для всех сценариев.
     rows.extend(
         [
-            [
-                KeyboardButton(
-                    text="Мини-приложение",
-                    web_app=WebAppInfo(url=webapp_url),
-                ),
-                KeyboardButton(text="Отметиться на паре"),
-            ],
+            [KeyboardButton(text="Отметиться на паре")],
             [KeyboardButton(text="Меню")],
         ]
     )

@@ -3,7 +3,8 @@ import logging
 import sys
 
 from aiogram import Bot, Dispatcher
-from aiogram.types import BotCommand
+from aiogram.exceptions import TelegramAPIError
+from aiogram.types import BotCommand, MenuButtonCommands
 from aiohttp import web
 
 import config
@@ -60,6 +61,14 @@ async def main() -> None:
         BotCommand(command="group_members", description="Состав группы"),
         BotCommand(command="versions", description="История обновлений"),
     ])
+    # Менюшка слева от поля ввода — это «команды», а не Mini App.
+    # Открывать мини-приложение нужно кнопкой справа от поля ввода ("Мини-приложение"
+    # из главной reply-клавиатуры). Этот вызов перекрывает любую настройку Menu Button
+    # из BotFather для всех пользователей бота.
+    try:
+        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    except TelegramAPIError as ex:
+        logging.warning("Не удалось переключить menu button на «Команды»: %s", ex)
     # Персистентное FSM-хранилище: диалоги (создание группы, ввод дедлайна, загрузка ДЗ)
     # переживают рестарт бота — состояние пишется в ту же БД, что и остальные данные.
     dp = Dispatcher(storage=SqlAlchemyStorage())

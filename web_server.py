@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -72,12 +73,86 @@ def _schedule_rows_need_ruz_refresh(schedules: list[Schedule]) -> bool:
     return False
 
 
+# Жёсткий потолок на синхронизацию РУЗ во время HTTP-запроса от мини-приложения.
+# Иначе медленный/висящий РУЗ → Apache-прокси у Timeweb выкидывает 504 → у пользователя
+# «не открывается». Если не успели — досинхронизируется в фоне, а клиент получит
+# то, что есть в кэше (для первого открытия — пустой результат, повторное открытие подхватит данные).
+_WEB_RUZ_SYNC_BUDGET_S = 5.0
+
+
+async def _background_full_resync(study_group_id: int) -> None:
+    """Фоновая полная синхронизация расписания для конкретной группы (после web-таймаута)."""
+    from handlers.schedule import sync_study_group_schedule
+
+    try:
+        async with async_session_maker() as session:
+            sg = await session.get(StudyGroup, study_group_id)
+            if sg is None:
+                return
+            n = await sync_study_group_schedule(session, sg)
+            if n:
+                await session.commit()
+    except Exception:
+        logger.exception(
+            "background full schedule resync failed for group_id=%s", study_group_id
+        )
+
+
+async def _background_ensure_range(
+    study_group_id: int, range_start: date, range_end: date
+) -> None:
+    """Фоновая дозагрузка окна расписания, если в web-запросе не уложились в бюджет."""
+    try:
+        async with async_session_maker() as session:
+            sg = await session.get(StudyGroup, study_group_id)
+            if sg is None:
+                return
+            if await ensure_schedule_cache_covers_range(
+                session, sg, range_start, range_end
+            ):
+                await session.commit()
+    except Exception:
+        logger.exception(
+            "background ensure_schedule_cache_covers_range failed for group_id=%s",
+            study_group_id,
+        )
+
+
+async def _ensure_schedule_cache_with_budget(
+    session,
+    sg: StudyGroup,
+    range_start: date,
+    range_end: date,
+) -> bool:
+    """Доcинк РУЗ в рамках web-запроса, но не дольше _WEB_RUZ_SYNC_BUDGET_S. При таймауте отдаём задачу в фон."""
+    try:
+        return await asyncio.wait_for(
+            ensure_schedule_cache_covers_range(session, sg, range_start, range_end),
+            timeout=_WEB_RUZ_SYNC_BUDGET_S,
+        )
+    except asyncio.TimeoutError:
+        await session.rollback()
+        asyncio.create_task(
+            _background_ensure_range(sg.id, range_start, range_end)
+        )
+        logger.info(
+            "schedule cache ensure-range > %ss for group_id=%s — продолжаем в фоне",
+            _WEB_RUZ_SYNC_BUDGET_S,
+            sg.id,
+        )
+        return False
+
+
 async def _resync_schedule_cache_if_stale(
     session,
     sg: StudyGroup | None,
     schedules: list[Schedule],
 ) -> bool:
-    """Перезаписать расписание из РУЗ, если кэш без lesson_kind или contingent. Возвращает True, если был commit."""
+    """Перезаписать расписание из РУЗ, если кэш без lesson_kind или contingent.
+
+    Чтобы быстрый pageload в мини-приложении не подвисал на медленном РУЗ, у синка
+    жёсткий бюджет _WEB_RUZ_SYNC_BUDGET_S. Не успели → переносим в фон, отдаём то, что есть.
+    """
     if not sg or not schedules or not _schedule_rows_need_ruz_refresh(schedules):
         return False
     today = date.today()
@@ -85,7 +160,20 @@ async def _resync_schedule_cache_if_stale(
         return False
     from handlers.schedule import sync_study_group_schedule
 
-    n = await sync_study_group_schedule(session, sg)
+    try:
+        n = await asyncio.wait_for(
+            sync_study_group_schedule(session, sg),
+            timeout=_WEB_RUZ_SYNC_BUDGET_S,
+        )
+    except asyncio.TimeoutError:
+        await session.rollback()
+        asyncio.create_task(_background_full_resync(sg.id))
+        logger.info(
+            "schedule full resync > %ss for group_id=%s — продолжаем в фоне",
+            _WEB_RUZ_SYNC_BUDGET_S,
+            sg.id,
+        )
+        return False
     if not n:
         return False
     await session.commit()
@@ -536,7 +624,7 @@ async def api_schedule_week(request: web.Request) -> web.Response:
         if sg and await schedule_cache_needs_expansion(
             session, u["study_group_id"], today, end
         ):
-            if await ensure_schedule_cache_covers_range(session, sg, today, end):
+            if await _ensure_schedule_cache_with_budget(session, sg, today, end):
                 await session.commit()
         stmt = (
             select(Schedule)
@@ -579,7 +667,7 @@ async def api_schedule_today(request: web.Request) -> web.Response:
         if sg and await schedule_cache_needs_expansion(
             session, u["study_group_id"], today, today
         ):
-            if await ensure_schedule_cache_covers_range(session, sg, today, today):
+            if await _ensure_schedule_cache_with_budget(session, sg, today, today):
                 await session.commit()
         stmt = (
             select(Schedule)
@@ -643,7 +731,9 @@ async def api_schedule_week_window(request: web.Request) -> web.Response:
         if sg and await schedule_cache_needs_expansion(
             session, u["study_group_id"], week_start, week_end
         ):
-            if await ensure_schedule_cache_covers_range(session, sg, week_start, week_end):
+            if await _ensure_schedule_cache_with_budget(
+                session, sg, week_start, week_end
+            ):
                 await session.commit()
                 schedules = list(await session.scalars(week_stmt))
         if await _resync_schedule_cache_if_stale(session, sg, schedules):
