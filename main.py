@@ -4,7 +4,7 @@ import sys
 
 from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import BotCommand, MenuButtonCommands
+from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 from aiohttp import web
 
 import config
@@ -61,14 +61,28 @@ async def main() -> None:
         BotCommand(command="group_members", description="Состав группы"),
         BotCommand(command="versions", description="История обновлений"),
     ])
-    # Менюшка слева от поля ввода — это «команды», а не Mini App.
-    # Открывать мини-приложение нужно кнопкой справа от поля ввода ("Мини-приложение"
-    # из главной reply-клавиатуры). Этот вызов перекрывает любую настройку Menu Button
-    # из BotFather для всех пользователей бота.
-    try:
-        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-    except TelegramAPIError as ex:
-        logging.warning("Не удалось переключить menu button на «Команды»: %s", ex)
+    # Зелёная пилюля слева от поля ввода — это chat menu button. Явно ставим её
+    # в режим Mini App (а не «команды» / не настройку из BotFather), чтобы пользователь
+    # одним тапом открывал мини-приложение. Если WEBAPP_PUBLIC_URL не HTTPS — Telegram
+    # такую кнопку отклонит, поэтому в локальной разработке вызов пропускается.
+    webapp_root = config.WEBAPP_PUBLIC_URL.rstrip("/")
+    if webapp_root.lower().startswith("https://"):
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Мини-приложение",
+                    web_app=WebAppInfo(url=f"{webapp_root}/index.html"),
+                )
+            )
+        except TelegramAPIError as ex:
+            logging.warning(
+                "Не удалось выставить chat menu button на Mini App: %s", ex
+            )
+    else:
+        logging.info(
+            "WEBAPP_PUBLIC_URL не HTTPS (%s) — chat menu button оставляю как есть",
+            webapp_root,
+        )
     # Персистентное FSM-хранилище: диалоги (создание группы, ввод дедлайна, загрузка ДЗ)
     # переживают рестарт бота — состояние пишется в ту же БД, что и остальные данные.
     dp = Dispatcher(storage=SqlAlchemyStorage())
