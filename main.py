@@ -43,6 +43,12 @@ async def main() -> None:
     _log_webapp_hints()
     await init_db()
 
+    # Вставляем начальные данные (группы + участники) при каждом старте.
+    # INSERT OR IGNORE — безопасно, дубликатов не создаёт.
+    from seed_data import seed as seed_db
+    from database import async_session_maker
+    await seed_db(session_maker=async_session_maker)
+
     if sys.platform == "win32":
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

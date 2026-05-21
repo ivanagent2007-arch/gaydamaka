@@ -1,14 +1,16 @@
 """
-Seed-скрипт: вставляет группы и участников в пустую Railway-базу.
-Запуск: railway run python seed_data.py
-INSERT OR IGNORE — безопасно запускать повторно.
+Seed-данные: группы и состав участников.
+
+Используется двумя способами:
+  1. Автоматически при старте бота (вызывается из main.py после init_db).
+     INSERT OR IGNORE — повторный запуск безопасен, дубликатов не создаёт.
+  2. Вручную: railway run python seed_data.py
 """
 import asyncio
-from database import init_db
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+import logging
 from sqlalchemy import text
-import config
+
+log = logging.getLogger(__name__)
 
 GROUPS = [
     {'id': 1, 'name': 'БИ25-2', 'join_code': 'QCZXVPSG', 'ruz_group_search': 'БИ25-2', 'creator_user_id': 1, 'semester_number': 1, 'corporate_email': 'bi25-2@yandex.ru', 'imap_password': 'ogkpnjcromnxnqjm', 'ruz_base_url': None, 'org_cookies': None},
@@ -83,11 +85,18 @@ USERS = [
     {'id': 65, 'telegram_id': 9990000058, 'full_name': '@ivan_makarov', 'group_name': '18-ла', 'role': 'student', 'study_group_id': 2, 'birthday_month': None, 'birthday_day': None, 'birth_year': None},
 ]
 
-async def seed():
-    await init_db()
-    engine = create_async_engine(config.DATABASE_URL)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with async_session() as session:
+async def seed(session_maker=None) -> None:
+    """Вставляет GROUPS и USERS через INSERT OR IGNORE.
+
+    session_maker — async_session_maker из database.py.
+    Если не передан — создаётся собственный (для запуска скриптом напрямую).
+    """
+    if session_maker is None:
+        from database import init_db, async_session_maker
+        await init_db()
+        session_maker = async_session_maker
+
+    async with session_maker() as session:
         for g in GROUPS:
             await session.execute(text("""
                 INSERT OR IGNORE INTO study_groups
@@ -107,6 +116,8 @@ async def seed():
                    :birthday_month, :birthday_day, :birth_year)
             """), u)
         await session.commit()
-    print(f"Готово! Вставлено групп: {len(GROUPS)}, пользователей: {len(USERS)}")
+    log.info("Seed: вставлено групп=%d, пользователей=%d", len(GROUPS), len(USERS))
 
-asyncio.run(seed())
+
+if __name__ == "__main__":
+    asyncio.run(seed())
